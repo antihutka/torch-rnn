@@ -15,6 +15,7 @@ cmd:option('-gpu_backend', 'cuda')
 cmd:option('-verbose', 0)
 cmd:option('-hide_start_text', 0)
 cmd:option('-read_start_text', 0)
+cmd:option('-stop_on_newline', 0)
 local opt = cmd:parse(arg)
 
 if opt.read_start_text == 1 then

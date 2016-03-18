@@ -127,7 +127,7 @@ function LM:decode_string(encoded)
   for i = 1, encoded:size(1) do
     local idx = encoded[i]
     local token = self.idx_to_token[idx]
-    s = s .. token
+    if token ~= nil then s = s .. token end
   end
   return s
 end
@@ -185,6 +185,9 @@ function LM:sample(kwargs, charout)
     sampled[{{}, {t, t}}]:copy(next_char)
     charout(self.idx_to_token[next_char[1][1]])
     scores = self:forward(next_char)
+    if kwargs.stop_on_newline == 1 and self.idx_to_token[next_char[1][1]] == "\n" then
+    	break
+    end
   end
 
   self:resetStates()
