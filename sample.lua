@@ -38,5 +38,6 @@ if opt.verbose == 1 then print(msg) end
 
 model:evaluate()
 
-local sample = model:sample(opt)
-print(sample)
+io.write(opt.start_text)
+local sample = model:sample(opt, io.write)
+print('')

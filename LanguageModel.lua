@@ -144,7 +144,7 @@ Inputs:
 Returns:
 - sampled: (1, max_length) array of integers, where the first part is init.
 --]]
-function LM:sample(kwargs)
+function LM:sample(kwargs, charout)
   local T = utils.get_kwarg(kwargs, 'length', 100)
   local start_text = utils.get_kwarg(kwargs, 'start_text', '')
   local verbose = utils.get_kwarg(kwargs, 'verbose', 0)
@@ -183,6 +183,7 @@ function LM:sample(kwargs)
        next_char = torch.multinomial(probs, 1):view(1, 1)
     end
     sampled[{{}, {t, t}}]:copy(next_char)
+    charout(self.idx_to_token[next_char[1][1]])
     scores = self:forward(next_char)
   end
 
