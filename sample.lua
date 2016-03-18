@@ -13,6 +13,7 @@ cmd:option('-temperature', 1)
 cmd:option('-gpu', 0)
 cmd:option('-gpu_backend', 'cuda')
 cmd:option('-verbose', 0)
+cmd:option('-hide_start_text', 0)
 local opt = cmd:parse(arg)
 
 
@@ -38,6 +39,9 @@ if opt.verbose == 1 then print(msg) end
 
 model:evaluate()
 
-io.write(opt.start_text)
+if opt.hide_start_text == 0 then
+	io.write(opt.start_text)
+end
+
 local sample = model:sample(opt, io.write)
 print('')
