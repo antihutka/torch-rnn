@@ -14,8 +14,12 @@ cmd:option('-gpu', 0)
 cmd:option('-gpu_backend', 'cuda')
 cmd:option('-verbose', 0)
 cmd:option('-hide_start_text', 0)
+cmd:option('-read_start_text', 0)
 local opt = cmd:parse(arg)
 
+if opt.read_start_text == 1 then
+	opt.start_text = io.read("*all")
+end
 
 local checkpoint = torch.load(opt.checkpoint)
 local model = checkpoint.model
