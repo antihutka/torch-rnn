@@ -102,7 +102,7 @@ Input: Table of
 - x:  Sequence of inputs, of shape (N, T, D)
 
 Output:
-- h: Sequence of hidden states, of shape (T, N, H)
+- h: Sequence of hidden states, of shape (N, T, H)
 --]]
 function layer:updateOutput(input)
   local h0, x = self:_unpack_input(input)
@@ -173,7 +173,7 @@ function layer:backward(input, gradOutput, scale)
     grad_Wx:addmm(scale, x[{{}, t}]:t(), grad_a)
     grad_Wh:addmm(scale, prev_h:t(), grad_a)
     grad_next_h:mm(grad_a, Wh:t())
-    self.buffer2:resize(H):sum(grad_a, 1)
+    self.buffer2:resize(1, H):sum(grad_a, 1)
     grad_b:add(scale, self.buffer2)
   end
   grad_h0:copy(grad_next_h)
@@ -197,3 +197,11 @@ function layer:accGradParameters(input, gradOutput, scale)
   self:backward(input, gradOutput, scale)
 end
 
+
+function layer:clearState()
+  self.buffer1:set()
+  self.buffer2:set()
+  self.grad_h0:set()
+  self.grad_x:set()
+  self.output:set()
+end

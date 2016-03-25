@@ -32,7 +32,7 @@ function layer:__init(input_dim, hidden_dim)
   self.gates = torch.Tensor()   -- This will be (N, T, 4H)
   self.buffer1 = torch.Tensor() -- This will be (N, H)
   self.buffer2 = torch.Tensor() -- This will be (N, H)
-  self.buffer3 = torch.Tensor() -- This will be (H,)
+  self.buffer3 = torch.Tensor() -- This will be (1, 4H)
   self.grad_a_buffer = torch.Tensor() -- This will be (N, 4H)
 
   self.h0 = torch.Tensor()
@@ -242,7 +242,7 @@ function layer:backward(input, gradOutput, scale)
     grad_x[{{}, t}]:mm(grad_a, Wx:t())
     grad_Wx:addmm(scale, x[{{}, t}]:t(), grad_a)
     grad_Wh:addmm(scale, prev_h:t(), grad_a)
-    local grad_a_sum = self.buffer3:resize(H):sum(grad_a, 1)
+    local grad_a_sum = self.buffer3:resize(1, 4 * H):sum(grad_a, 1)
     grad_b:add(scale, grad_a_sum)
 
     grad_next_h:mm(grad_a, Wh:t())
@@ -263,8 +263,23 @@ function layer:backward(input, gradOutput, scale)
 end
 
 
+function layer:clearState()
+  self.cell:set()
+  self.gates:set()
+  self.buffer1:set()
+  self.buffer2:set()
+  self.buffer3:set()
+  self.grad_a_buffer:set()
+
+  self.grad_c0:set()
+  self.grad_h0:set()
+  self.grad_x:set()
+  self.output:set()
+end
+
+
 function layer:updateGradInput(input, gradOutput)
-  self:backward(input, gradOutput, 0)
+  return self:backward(input, gradOutput, 0)
 end
 
 
