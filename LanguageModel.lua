@@ -211,3 +211,13 @@ end
 function LM:clearState()
   self.net:clearState()
 end
+
+function LM:convertTables()
+  for k,v in pairs(self.idx_to_token) do
+    if (v:sub(1,1) == "[") and (v:len() == 5) then
+      local newv = string.char(tonumber(v:sub(2,4)))
+      self.idx_to_token[k] = newv
+      self.token_to_idx[newv] = k
+    end
+  end
+end

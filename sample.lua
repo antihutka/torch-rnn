@@ -16,6 +16,7 @@ cmd:option('-verbose', 0)
 cmd:option('-hide_start_text', 0)
 cmd:option('-read_start_text', 0)
 cmd:option('-stop_on_newline', 0)
+cmd:option('-bytes', 0)
 local opt = cmd:parse(arg)
 
 if opt.read_start_text == 1 then
@@ -41,6 +42,7 @@ else
   msg = 'Running in CPU mode'
 end
 if opt.verbose == 1 then print(msg) end
+if opt.bytes == 1 then model:convertTables() end
 
 model:evaluate()
 
