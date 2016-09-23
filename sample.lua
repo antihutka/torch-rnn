@@ -50,5 +50,7 @@ if opt.hide_start_text == 0 then
 	io.write(opt.start_text)
 end
 
+io.stdout:setvbuf('no') 
+
 local sample = model:sample(opt, io.write)
 print('')

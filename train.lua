@@ -161,6 +161,8 @@ end
 local optim_config = {learningRate = opt.learning_rate}
 local num_train = loader.split_sizes['train']
 local num_iterations = opt.max_epochs * num_train
+local avg_loss = 0
+local trend = 0
 model:training()
 for i = 1, num_iterations do
   local epoch = math.floor(i / num_train) + 1
@@ -180,10 +182,14 @@ for i = 1, num_iterations do
   -- Note that adam returns a singleton array of losses
   local _, loss = optim.adam(f, params, optim_config)
   table.insert(train_loss_history, loss[1])
+  if avg_loss == 0 then avg_loss = loss[1] end
+  local avg_loss_old = avg_loss
+  avg_loss = avg_loss * 0.999 + loss[1] * 0.001
+  trend = trend * 0.999 + (avg_loss - avg_loss_old) * 0.001
   if opt.print_every > 0 and i % opt.print_every == 0 then
     local float_epoch = i / num_train + 1
-    local msg = 'Epoch %.2f / %d, i = %d / %d, loss = %f'
-    local args = {msg, float_epoch, opt.max_epochs, i, num_iterations, loss[1]}
+    local msg = 'Epoch %.2f / %d, i = %d / %d, loss = %f, avg_loss = %f, delta = %9.6f, trend = %10.7f'
+    local args = {msg, float_epoch, opt.max_epochs, i, num_iterations, loss[1], avg_loss, avg_loss - avg_loss_old, trend}
     print(string.format(unpack(args)))
   end
 
