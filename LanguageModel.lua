@@ -3,6 +3,8 @@ require 'nn'
 
 require 'VanillaRNN'
 require 'LSTM'
+require 'GRU'
+require 'GRIDGRU'
 
 local utils = require 'util.utils'
 
@@ -42,6 +44,10 @@ function LM:__init(kwargs)
       rnn = nn.VanillaRNN(prev_dim, H)
     elseif self.model_type == 'lstm' then
       rnn = nn.LSTM(prev_dim, H)
+    elseif self.model_type == 'gru' then
+      rnn = nn.GRU(prev_dim, H)
+    elseif self.model_type == 'gridgru' then
+      rnn = nn.GRIDGRU(D, H)
     end
     rnn.remember_states = true
     table.insert(self.rnns, rnn)
@@ -50,7 +56,7 @@ function LM:__init(kwargs)
       local view_in = nn.View(1, 1, -1):setNumInputDims(3)
       table.insert(self.bn_view_in, view_in)
       self.net:add(view_in)
-      self.net:add(nn.BatchNormalization(H))
+      self.net:add(nn.BatchNormalization((self.model_type == 'gridgru') and D or H))
       local view_out = nn.View(1, -1):setNumInputDims(2)
       table.insert(self.bn_view_out, view_out)
       self.net:add(view_out)
@@ -71,7 +77,11 @@ function LM:__init(kwargs)
   self.view2 = nn.View(1, -1):setNumInputDims(2)
 
   self.net:add(self.view1)
-  self.net:add(nn.Linear(H, V))
+  if self.model_type == 'gridgru' then
+    self.net:add(nn.Linear(D, V))
+  else
+    self.net:add(nn.Linear(H, V))
+  end
   self.net:add(self.view2)
 end
 
@@ -149,11 +159,9 @@ end
 --[[
 Sample from the language model. Note that this will reset the states of the
 underlying RNNs.
-
 Inputs:
 - init: String of length T0
 - max_length: Number of characters to sample
-
 Returns:
 - sampled: (1, max_length) array of integers, where the first part is init.
 --]]
