@@ -100,6 +100,8 @@ local val_loss_history_it = {}
 local forward_backward_times = {}
 local init_memory_usage, memory_usage = nil, {}
 
+print('number of parameters: ' .. params:nElement())
+
 if opt.memory_benchmark == 1 then
   -- This should only be enabled in GPU mode
   assert(cutorch)
