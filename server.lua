@@ -83,7 +83,7 @@ function get_str()
   end
 end
 
-if opt.ineractive == 1 then io.stdout:setvbuf('no') else io.stdout:setvbuf('line') end
+if opt.interactive == 1 then io.stdout:setvbuf('no') else io.stdout:setvbuf('line') end
 
 while true do
   local line = nextline()
