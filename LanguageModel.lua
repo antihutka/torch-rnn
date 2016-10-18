@@ -63,10 +63,12 @@ function LM:__init(kwargs)
   else
     self.net:add(nn.TemporalAdapter(nn.Linear(H, V)))
   end
+  self.has_temporal_adapter = true
 end
 
 
 function LM:updateOutput(input)
+  if not self.has_temporal_adapter then self:patch_ta() end
   return self.net:forward(input)
 end
 
@@ -124,6 +126,20 @@ function LM:decode_string(encoded)
   return s
 end
 
+
+function LM:patch_ta()
+  local between_views, mods = false, self.net.modules
+  local i,v
+  for i,v in ipairs(mods) do
+    if torch.type(mods[i]) == 'nn.View' then
+      between_views = not between_views
+      mods[i] = nn.Identity()
+    elseif between_views then
+      mods[i] = nn.TemporalAdapter(mods[i])
+    end
+  end
+  self.has_temporal_adapter = true
+end
 
 --[[
 Sample from the language model. Note that this will reset the states of the
