@@ -12,6 +12,7 @@ cmd:option('-bytes', 1)
 cmd:option('-maxlength', 512)
 cmd:option('-interactive', 0)
 cmd:option('-autoreply', 0)
+cmd:option('-start_text', '')
 local opt = cmd:parse(arg)
 
 local checkpoint = torch.load(opt.checkpoint)
@@ -84,6 +85,8 @@ function get_str()
 end
 
 if opt.interactive == 1 then io.stdout:setvbuf('no') else io.stdout:setvbuf('line') end
+
+if opt.start_text ~= '' then put_str(opt.start_text .. "\n") end
 
 while true do
   local line = nextline()
