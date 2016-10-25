@@ -82,6 +82,7 @@ function get_str()
       break
     end
   end
+  io.write('\n')
 end
 
 if opt.interactive == 1 then io.stdout:setvbuf('no') else io.stdout:setvbuf('line') end
