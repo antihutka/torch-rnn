@@ -72,8 +72,9 @@ function put_str(s)
 end
 
 function get_str()
+  local next_char
   for t = 1, opt.maxlength do
-    local next_char = model.idx_to_token[next_idx]
+    next_char = model.idx_to_token[next_idx]
     io.write(next_char)
     input[1] = next_idx
     local out = model:forward(input)
@@ -82,7 +83,7 @@ function get_str()
       break
     end
   end
-  io.write('\n')
+  if next_char ~= "\n" then io.write('\n') end
 end
 
 if opt.interactive == 1 then io.stdout:setvbuf('no') else io.stdout:setvbuf('line') end
