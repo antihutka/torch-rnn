@@ -8,14 +8,30 @@ import codecs
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--input_txt', default='data/tiny-shakespeare.txt')
+parser.add_argument('--input_json', default='data/index.json')
 parser.add_argument('--output_h5', default='data/tiny-shakespeare.h5')
-parser.add_argument('--output_json', default='data/tiny-shakespeare.json')
+parser.add_argument('--output_json', default='data/index.json')
 parser.add_argument('--val_frac', type=float, default=0.1)
 parser.add_argument('--test_frac', type=float, default=0.1)
 parser.add_argument('--quiet', action='store_true')
 parser.add_argument('--encoding', default='utf-8')
 args = parser.parse_args()
 
+def load_index(fname):
+  if os.path.exists(fname):
+    with open(fname, "r") as infile:
+      return json.load(infile)
+  else:
+    return None
+
+def save_index(fname, token_to_idx):
+  # Dump a JSON file for the vocab
+  json_data = {
+    'token_to_idx': token_to_idx,
+    'idx_to_token': {v: k for k, v in token_to_idx.iteritems()},
+  }
+  with open(fname, 'w') as f:
+    json.dump(json_data, f)
 
 if __name__ == '__main__':
   if args.encoding == 'bytes': args.encoding = None
@@ -23,6 +39,10 @@ if __name__ == '__main__':
   # First go the file once to see how big it is and to build the vocab
   token_to_idx = {}
   total_size = 0
+  # Load token index mapping if exists
+  index = load_index(args.input_json)
+  if index is not None:
+    token_to_idx = index['token_to_idx']
   with codecs.open(args.input_txt, 'r', args.encoding) as f:
     for line in f:
       total_size += len(line)
@@ -85,9 +105,4 @@ if __name__ == '__main__':
     token_to_idx = new_token_to_idx
 
   # Dump a JSON file for the vocab
-  json_data = {
-    'token_to_idx': token_to_idx,
-    'idx_to_token': {v: k for k, v in token_to_idx.iteritems()},
-  }
-  with open(args.output_json, 'w') as f:
-    json.dump(json_data, f)
+  save_index(args.output_json, token_to_idx)
