@@ -43,6 +43,19 @@ if __name__ == '__main__':
   index = load_index(args.input_json)
   if index is not None:
     token_to_idx = index['token_to_idx']
+
+  # If we're in bytes mode, convert [numbers] back to characters
+  if args.encoding is None:
+    new_token_to_idx = {}
+    for key in token_to_idx:
+      if len(key) > 1:
+        num = int(key[1:4])
+        print 'converting %s to %d' % (key, num)
+        new_token_to_idx[chr(num)] = token_to_idx[key]
+      else:
+        new_token_to_idx[key] = token_to_idx[key]
+    token_to_idx = new_token_to_idx
+
   with codecs.open(args.input_txt, 'r', args.encoding) as f:
     for line in f:
       total_size += len(line)
