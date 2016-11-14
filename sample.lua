@@ -3,6 +3,7 @@ require 'nn'
 
 require 'LanguageModel'
 
+torch.setdefaulttensortype('torch.FloatTensor')
 
 local cmd = torch.CmdLine()
 cmd:option('-checkpoint', 'cv/checkpoint_4000.t7')
