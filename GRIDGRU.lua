@@ -335,3 +335,7 @@ function layer:clearState()
   self.grad_x:set()
   self.output:set()
 end
+
+function layer:__tostring__()
+  return 'nn.GRIDGRU: ' .. self.input_dim .. 'x' .. self.hidden_dim
+end
