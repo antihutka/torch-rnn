@@ -46,6 +46,8 @@ cmd:option('-memory_benchmark', 0)
 cmd:option('-gpu', 0)
 cmd:option('-gpu_backend', 'cuda')
 
+cmd:option('-swaprnn', 0)
+
 local opt = cmd:parse(arg)
 
 
@@ -93,10 +95,18 @@ if opt.init_from ~= '' then
     start_i = checkpoint.i
   end
 else
-  model = nn.LanguageModel(opt_clone):type(dtype)
+  model = nn.LanguageModel(opt_clone)
 end
-local params, grad_params = model:getParameters()
+local params, grad_params
 local crit = nn.CrossEntropyCriterion():type(dtype)
+
+local function set_model_type()
+  model:type(dtype)
+  params, grad_params = model:getParameters()
+  if opt.swaprnn > 0 then model:swappable() end
+end
+
+set_model_type()
 
 -- Set up some variables we will use below
 local N, T = opt.batch_size, opt.seq_length
@@ -248,8 +258,7 @@ for i = start_i + 1, num_iterations do
     local filename = string.format('%s_%d.t7', opt.checkpoint_name, i)
     paths.mkdir(paths.dirname(filename))
     torch.save(filename, checkpoint)
-    model:type(dtype)
-    params, grad_params = model:getParameters()
+    set_model_type()
     collectgarbage()
   end
 end

@@ -112,7 +112,9 @@ function layer:updateOutput(input)
   local N, T, D, H = self:_get_sizes(input)
 
   self._return_grad_h0 = (h0 ~= nil)
-  
+
+  self:swapin()
+
   if not h0 then
     h0 = self.h0
     if h0:nElement() == 0 or not self.remember_states then
@@ -174,6 +176,8 @@ function layer:updateOutput(input)
     
   end
 
+  self:swapout()
+
   return self.output
 end
 
@@ -181,7 +185,9 @@ end
 function layer:backward(input, gradOutput, scale)
   scale = scale or 1.0
   local h0, x = self:_unpack_input(input)
-  
+
+  self:swapin()
+
   if not h0 then h0 = self.h0 end
 
   local grad_h0, grad_x = self.grad_h0, self.grad_x
@@ -305,6 +311,8 @@ function layer:backward(input, gradOutput, scale)
     self.gradInput = self.grad_x
   end
 
+  self:swapout()
+
   return self.gradInput
 end
 
@@ -319,13 +327,19 @@ function layer:accGradParameters(input, gradOutput, scale)
 end
 
 function layer:clearState()
-  self.cell:set()
-  self.gates:set()
+  if self.swap then
+    self.cell_sw:set()
+    self.gates_sw:set()
+    self.gatesd_sw:set()
+  else
+    self.cell:set()
+    self.gates:set()
+    self.gatesd:set()
+  end
   self.buffer1:set()
   self.buffer2:set()
   self.buffer3:set()
   self.grad_a_buffer:set()
-  self.gatesd:set()
   self.buffer1d:set()
   self.buffer2d:set()
   self.buffer3d:set()
@@ -338,4 +352,51 @@ end
 
 function layer:__tostring__()
   return 'nn.GRIDGRU: ' .. self.input_dim .. 'x' .. self.hidden_dim
+end
+
+local swappable_tensors = { "cell", "gates", "gatesd" }
+
+function layer:swapin()
+  if not self.swapped or not self.swap then return end
+  self.swapped = false
+  for k,v in ipairs(swappable_tensors) do
+    local vsw = v .. '_sw'
+    self[v]:resizeAs(self[vsw]):copy(self[vsw])
+  end
+end
+
+function layer:swapout()
+  if self.swapped or not self.swap then return end
+  self.swapped = true
+  for k,v in ipairs(swappable_tensors) do
+    local vsw = v .. '_sw'
+    self[vsw]:resizeAs(self[v]):copy(self[v])
+  end
+end
+
+function layer:swappable(with)
+  for k,v in ipairs(swappable_tensors) do
+    local vsw = v .. '_sw'
+    self[vsw] = torch.FloatTensor()
+    self[vsw]:resizeAs(self[v]):copy(self[v])
+  end
+  self.swap = true
+  self.swapped = true
+  if with then
+    assert(with.swap)
+    self:share(with, unpack(swappable_tensors))
+  end
+end
+
+function layer:type(type, tensorCache)
+  if self.swap then
+    for k,v in ipairs(swappable_tensors) do
+      local vsw = v .. '_sw'
+      self[v] = self[vsw]
+      self[vsw] = nil
+    end
+    self.swapped = false
+    self.swap = false
+  end
+  parent.type(self, type, tensorCache)
 end

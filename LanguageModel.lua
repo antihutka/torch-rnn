@@ -215,3 +215,9 @@ function LM:convertTables()
     end
   end
 end
+
+function LM:swappable()
+  for k,v in ipairs(self.rnns) do
+    v:swappable(self.net[k-1])
+  end
+end
