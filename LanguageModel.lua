@@ -54,7 +54,7 @@ function LM:__init(kwargs)
       self.net:add(nn.TemporalAdapter(nn.BatchNormalization((self.model_type == 'gridgru') and D or H)))
     end
     if self.dropout > 0 then
-      self.net:add(nn.Dropout(self.dropout))
+      self.net:add(nn.Dropout(self.dropout, nil, true))
     end
   end
 
