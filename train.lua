@@ -46,6 +46,7 @@ cmd:option('-memory_benchmark', 0)
 -- Backend options
 cmd:option('-gpu', 0)
 cmd:option('-gpu_backend', 'cuda')
+cmd:option('-gpu_opt', -2)
 
 cmd:option('-swaprnn', 0)
 
@@ -98,16 +99,28 @@ if opt.init_from ~= '' then
 else
   model = nn.LanguageModel(opt_clone)
 end
-local params, grad_params
+local params, grad_params, params_o, grad_params_o
 local crit = nn.CrossEntropyCriterion():type(dtype)
 
 local function set_model_type()
   model:type(dtype)
   params, grad_params = model:getParameters()
   if opt.swaprnn > 0 then model:swappable() end
+  if opt.gpu_opt == -2 then params_o, grad_params_o = params, grad_params end
 end
 
 set_model_type()
+
+if opt.gpu_opt > -2 then
+  params_o = torch.FloatTensor(params:size()):copy(params)
+  grad_params_o = torch.FloatTensor(grad_params:size()):zero()
+  if opt.gpu_opt > -1 then
+    cutorch.withDevice(opt.gpu_opt + 1, function()
+      params_o = params_o:cuda()
+      grad_params_o = grad_params_o:cuda()
+    end)
+  end
+end
 
 -- Set up some variables we will use below
 local N, T = opt.batch_size, opt.seq_length
@@ -173,6 +186,10 @@ local function f(w)
     grad_params:clamp(-opt.grad_clip, opt.grad_clip)
   end
 
+  if opt.gpu_opt > -2 then
+    grad_params_o:copy(grad_params)
+    if opt.gpu_opt > -1 then cutorch.setDevice(opt.gpu_opt + 1) end
+  end
   return loss, grad_params
 end
 
@@ -200,6 +217,11 @@ for i = start_i + 1, num_iterations do
   -- Take a gradient step and maybe print
   -- Note that adam returns a singleton array of losses
   local _, loss = optim.adam(f, params, optim_config)
+  if opt.gpu_opt > -2 then
+    params:copy(params_o)
+    if opt.gpu_opt > -1 then cutorch.setDevice(opt.gpu + 1) end
+  end
+
   table.insert(train_loss_history, loss[1])
   if avg_loss == 0 then avg_loss = loss[1] end
   local avg_loss_old = avg_loss
