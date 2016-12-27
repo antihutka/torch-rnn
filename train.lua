@@ -142,7 +142,7 @@ end
 
 -- Loss function that we pass to an optim method
 local function f(w)
-  assert(w == params)
+  assert(w == params or w == params_o)
   grad_params:zero()
 
   -- Get a minibatch and run the model forward, maybe timing it
@@ -190,7 +190,7 @@ local function f(w)
     grad_params_o:copy(grad_params)
     if opt.gpu_opt > -1 then cutorch.setDevice(opt.gpu_opt + 1) end
   end
-  return loss, grad_params
+  return loss, grad_params_o
 end
 
 -- Train the model!
@@ -216,7 +216,7 @@ for i = start_i + 1, num_iterations do
 
   -- Take a gradient step and maybe print
   -- Note that adam returns a singleton array of losses
-  local _, loss = optim.adam(f, params, optim_config)
+  local _, loss = optim.adam(f, params_o, optim_config)
   if opt.gpu_opt > -2 then
     params:copy(params_o)
     if opt.gpu_opt > -1 then cutorch.setDevice(opt.gpu + 1) end

@@ -361,7 +361,7 @@ function layer:swapin()
   self.swapped = false
   for k,v in ipairs(swappable_tensors) do
     local vsw = v .. '_sw'
-    self[v]:resizeAs(self[vsw]):copy(self[vsw])
+    self[v]:resize(self[vsw]:size()):copy(self[vsw])
   end
 end
 
@@ -370,7 +370,7 @@ function layer:swapout()
   self.swapped = true
   for k,v in ipairs(swappable_tensors) do
     local vsw = v .. '_sw'
-    self[vsw]:resizeAs(self[v]):copy(self[v])
+    self[vsw]:resize(self[v]:size()):copy(self[v])
   end
 end
 
@@ -378,7 +378,7 @@ function layer:swappable(with)
   for k,v in ipairs(swappable_tensors) do
     local vsw = v .. '_sw'
     self[vsw] = torch.FloatTensor()
-    self[vsw]:resizeAs(self[v]):copy(self[v])
+    self[vsw]:resize(self[v]:size()):copy(self[v])
   end
   self.swap = true
   self.swapped = true
