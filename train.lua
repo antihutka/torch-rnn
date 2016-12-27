@@ -276,6 +276,7 @@ for i = start_i + 1, num_iterations do
     -- Now save a torch checkpoint with the model
     -- Cast the model to float before saving so it can be used on CPU
     model:clearState()
+    grad_params:zero()
     model:float()
     checkpoint.model = model
     local filename = string.format('%s_%d.t7', opt.checkpoint_name, i)
