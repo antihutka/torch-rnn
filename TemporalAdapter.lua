@@ -75,3 +75,11 @@ end
 function layer:accUpdateGradParameters(input, gradOutput, learningRate)
   return self.net:accUpdateGradParameters(input, gradOutput, learningRate)
 end
+
+function layer:clearState()
+  self.net:clearState()
+end
+
+function layer:__tostring__()
+  return 'nn.TemporalAdapter: ' .. tostring(self.net.modules[2])
+end
