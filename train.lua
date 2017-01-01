@@ -199,6 +199,7 @@ local num_train = loader.split_sizes['train']
 local num_iterations = opt.max_epochs * num_train
 local avg_loss = 0
 local trend = 0
+local iteration_timer = torch.Timer()
 model:training()
 for i = start_i + 1, num_iterations do
   local epoch = math.floor(i / num_train) + 1
@@ -229,9 +230,11 @@ for i = start_i + 1, num_iterations do
   avg_loss = avg_loss * 0.999 + loss[1] * 0.001
   trend = trend * 0.999 + (avg_loss - avg_loss_old) * 0.001
   if opt.print_every > 0 and i % opt.print_every == 0 then
+    local iter_time = iteration_timer:time().real / opt.print_every
+    iteration_timer:reset()
     local float_epoch = i / num_train + 1
-    local msg = 'Epoch %.2f / %d, i = %d / %d, loss = %f, avg_loss = %f, delta = %9.6f, trend = %10.7f'
-    local args = {msg, float_epoch, opt.max_epochs, i, num_iterations, loss[1], avg_loss, avg_loss - avg_loss_old, trend}
+    local msg = 'Epoch %.2f / %d, i = %d / %d, loss = %f, avg_loss = %f, delta = %9.6f, trend = %10.7f, time = %.2f, tps = %.1f'
+    local args = {msg, float_epoch, opt.max_epochs, i, num_iterations, loss[1], avg_loss, avg_loss - avg_loss_old, trend, iter_time, opt.batch_size * opt.seq_length / iter_time}
     print(string.format(unpack(args)))
   end
 
