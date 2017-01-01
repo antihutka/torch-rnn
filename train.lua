@@ -211,6 +211,7 @@ for i = start_i + 1, num_iterations do
     if epoch % opt.lr_decay_every == 0 then
       local old_lr = optim_config.learningRate
       optim_config = {learningRate = old_lr * opt.lr_decay_factor}
+      print('Changing learning rate to ' .. optim_config.learningRate)
     end
   end
 
