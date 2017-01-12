@@ -105,7 +105,7 @@ local crit = nn.CrossEntropyCriterion():type(dtype)
 local function set_model_type()
   model:type(dtype)
   params, grad_params = model:getParameters()
-  if opt.swaprnn > 0 then model:swappable() end
+  if opt.swaprnn > 0 then model:swappable(opt.swaprnn) end
   if opt.gpu_opt == -2 then params_o, grad_params_o = params, grad_params end
 end
 

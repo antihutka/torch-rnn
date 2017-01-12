@@ -216,9 +216,9 @@ function LM:convertTables()
   end
 end
 
-function LM:swappable()
+function LM:swappable(layers)
   for k,v in ipairs(self.rnns) do
-    v:swappable(self.net[k-1])
+    if layers < 2 or k <= layers then v:swappable(self.rnns[k-1]) end
   end
 end
 
