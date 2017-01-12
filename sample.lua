@@ -27,6 +27,8 @@ end
 local checkpoint = torch.load(opt.checkpoint)
 local model = checkpoint.model
 
+model:remove_grad()
+
 local msg
 if opt.gpu >= 0 and opt.gpu_backend == 'cuda' then
   require 'cutorch'

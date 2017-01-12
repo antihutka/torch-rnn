@@ -221,3 +221,13 @@ function LM:swappable()
     v:swappable(self.net[k-1])
   end
 end
+
+function LM:remove_grad()
+  local f
+  f = function(module)
+    module.gradWeight = nil
+    module.gradBias = nil
+    if (module.net) then module.net:apply(f) end
+  end
+  self.net:apply(f)
+end
