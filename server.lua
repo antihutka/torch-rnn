@@ -51,26 +51,13 @@ if opt.bytes == 1 then model:convertTables() end
 model:evaluate()
 model:resetStates()
 
-function idx_from_scores(scores)
-  local nc
-  if opt.sample == 0 then
-    _, nc = scores:max(3)
-    nc = nc[{{}, {}, 1}]
-  else
-    local probs = torch.div(scores, opt.temperature):double():exp():squeeze()
-    probs:div(torch.sum(probs))
-    nc = torch.multinomial(probs, 1):view(1, 1)
-  end
-  return nc[1][1]
-end
-
 function put_str(s)
   local x = model:encode_string(s):view(1, -1)
   local length = x:size(2)
   local sampled = torch.LongTensor(1, length)
   sampled[{{}, {1, length}}]:copy(x)
   local scores = model:forward(x)[{{}, {length, length}}]
-  next_idx = idx_from_scores(scores)
+  next_idx = model:sampleFromScores(scores, opt.temperature, opt.sample)
 end
 
 function get_str()
@@ -80,7 +67,7 @@ function get_str()
     io.write(next_char)
     input[1] = next_idx
     local out = model:forward(input)
-    next_idx = idx_from_scores(out)
+    next_idx = model:sampleFromScores(out, opt.temperature, opt.sample)
     if next_char == "\n" then
       break
     end
