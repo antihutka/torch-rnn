@@ -404,3 +404,12 @@ function layer:type(type, tensorCache)
   end
   parent.type(self, type, tensorCache)
 end
+
+function layer:setBatchSize(N)
+  local H = self.hidden_dim
+  self.h0:resize(N, H):zero()
+end
+
+function layer:getState(n)
+  return self.h0[n]
+end

@@ -231,3 +231,23 @@ function LM:remove_grad()
   end
   self.net:apply(f)
 end
+
+function LM:setBatchSize(N)
+  for k,v in ipairs(self.rnns) do
+    v:setBatchSize(N)
+  end
+end
+
+function LM:getState(n)
+  t = {}
+  for k,v in ipairs(self.rnns) do
+    table.insert(t, v:getState(n):clone())
+  end
+  return t
+end
+
+function LM:setState(n, state)
+  for k,v in ipairs(self.rnns) do
+    v:getState(n):copy(state[k])
+  end
+end
