@@ -141,6 +141,24 @@ function LM:patch_ta()
   self.has_temporal_adapter = true
 end
 
+local divbuf,dblbuf = torch.FloatTensor(), torch.DoubleTensor()
+function LM:sampleFromScores(scores, temperature, sample)
+  local next_char, _
+  divbuf = divbuf:typeAs(scores)
+  local probs = divbuf:div(scores, temperature)
+  dblbuf:resize(probs:size())
+  probs = dblbuf:copy(probs):exp():squeeze()
+  
+  probs:div(torch.sum(probs))
+  if sample == 0 then
+    _, next_char = scores:max(3)
+    next_char = next_char[{1,1,1}]
+  else
+    next_char = torch.multinomial(probs, 1):view(1, 1)[{1,1}]
+  end
+  return next_char, -math.log(probs[next_char]), probs[next_char]
+end
+
 --[[
 Sample from the language model. Note that this will reset the states of the
 underlying RNNs.
@@ -181,18 +199,11 @@ function LM:sample(kwargs, charout)
   
   local _, next_char = nil, nil
   for t = first_t, T do
-    if sample == 0 then
-      _, next_char = scores:max(3)
-      next_char = next_char[{{}, {}, 1}]
-    else
-       local probs = torch.div(scores, temperature):double():exp():squeeze()
-       probs:div(torch.sum(probs))
-       next_char = torch.multinomial(probs, 1):view(1, 1)
-    end
-    sampled[{{}, {t, t}}]:copy(next_char)
-    charout(self.idx_to_token[next_char[1][1]])
-    scores = self:forward(next_char)
-    if kwargs.stop_on_newline == 1 and self.idx_to_token[next_char[1][1]] == "\n" then
+    next_char = self:sampleFromScores(scores, temperature, sample)
+    sampled[{1, t}] = next_char
+    charout(self.idx_to_token[next_char])
+    scores = self:forward(sampled[{{}, {t, t}}])
+    if kwargs.stop_on_newline == 1 and self.idx_to_token[next_char] == "\n" then
     	break
     end
   end
