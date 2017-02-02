@@ -142,14 +142,19 @@ function LM:patch_ta()
 end
 
 local divbuf,dblbuf = torch.FloatTensor(), torch.DoubleTensor()
-function LM:sampleFromScores(scores, temperature, sample)
-  local next_char, _
+function LM:probsFromScores(scores, temperature)
   divbuf = divbuf:typeAs(scores)
   local probs = divbuf:div(scores, temperature)
   dblbuf:resize(probs:size())
   probs = dblbuf:copy(probs):exp():squeeze()
   
   probs:div(torch.sum(probs))
+  return probs
+end
+
+function LM:sampleFromScores(scores, temperature, sample)
+  local next_char, _
+  local probs = self:probsFromScores(scores, temperature)
   if sample == 0 then
     _, next_char = scores:max(3)
     next_char = next_char[{1,1,1}]
