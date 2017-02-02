@@ -19,6 +19,8 @@ cmd:option('-verbose', 0)
 cmd:option('-color', 0)
 cmd:option('-multi_count', 1)
 cmd:option('-benchmark', 0)
+cmd:option('-relevance_sampling', 0)
+cmd:option('-relevance_selection', 0)
 local opt = cmd:parse(arg)
 
 local checkpoint = torch.load(opt.checkpoint)
@@ -29,6 +31,8 @@ local current_scores
 local timer
 if opt.benchmark > 0 then timer = torch.Timer() end
 --local output = torch.LongTensor(1, 1)
+local use_relevance = false
+if opt.relevance_sampling > 0 or opt.relevance_selection > 0 then use_relevance = true end
 
 if opt.interactive == 1 then
   local ok, readline = pcall(require, 'readline')
@@ -112,7 +116,7 @@ function get_str_multi()
   local states, generated = {}, {}
   local starting_state = model:getState(1)
   for i = 1, opt.multi_count do
-    states[i] = { state = starting_state, scores = current_scores, text = "", value = 0, next_idx = 0 , valued = 0}
+    states[i] = { state = starting_state, scores = current_scores, text = "", value = 0, next_idx = 0 , valued = 0, valuer = 0, valuerd = 0}
   end
   while true do
     if timer then timer:reset() end
@@ -123,6 +127,11 @@ function get_str_multi()
       v.value = v.value + ne
       v.next_idx = ni
       v.valued = v.value / #v.text
+      if v.scores_r then
+        local rp = model:probsFromScores(v.scores_r, opt.temperature)
+        v.valuer = v.valuer - math.log(rp[ni])
+        v.valuerd = v.valuer / #v.text
+      end
       if opt.verbose > 2 then print('Current response[' .. k .. ']: ' .. v.text .. ' (' .. v.valued .. ')') end
     end
     for i = #states,1,-1 do
@@ -134,26 +143,39 @@ function get_str_multi()
       end
     end
     if #states == 0 then break end
-    model:setBatchSize(#states)
-    input:resize(#states, 1)
+    local batchsize = #states
+    if use_relevance then batchsize = 2 * batchsize end
+    model:setBatchSize(batchsize)
+    input:resize(batchsize, 1)
     for k,v in ipairs(states) do
       model:setState(k, v.state)
       input[{k,1}] = v.next_idx
+      if use_relevance then input[{k+#states,1}] = v.next_idx end
+      if v.state_r then model:setState(k+#states, v.state_r) end
     end
     local out = model:forward(input)
     for k,v in ipairs(states) do
       states[k].state = model:getState(k)
       states[k].scores = out[{{k}}]
+      if use_relevance then
+        states[k].state_r = model:getState(k+#states)
+        states[k].scores_r = out[{{k+#states}}]
+      end
+      if opt.relevance_sampling > 0 then states[k].scores:add(-opt.relevance_sampling, out[{{k+#states}}]) end
     end
     if timer then print('Time: ' .. timer:time().real) end
   end
-  table.sort(generated, function (a,b) return a.valued < b.valued end)
+  for k,v in ipairs(generated) do
+    v.valuef = v.valued - opt.relevance_selection * v.valuerd
+  end
+  table.sort(generated, function (a,b) return a.valuef < b.valuef end)
   if opt.verbose > 0 then
+    print('')
     local lasttext
     for k,v in ipairs(generated) do
       if lasttext ~= v.text then
         lasttext = v.text
-        print(string.format('C %3d %1.3f %s', k, v.valued, v.text))
+        print(string.format('C %3d %1.3f %1.3f %1.3f %s', k, v.valuef, v.valued, v.valuerd, v.text))
       end
     end
   else
@@ -161,6 +183,7 @@ function get_str_multi()
   end
   model:setBatchSize(1)
   model:setState(1, generated[1].state)
+  put_str("\n")
 end
 
 if opt.interactive == 1 then io.stdout:setvbuf('no') else io.stdout:setvbuf('line') end
