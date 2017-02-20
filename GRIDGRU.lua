@@ -130,23 +130,30 @@ function layer:updateOutput(input)
   local Wx = self.weight[{{1, D}}]
   local Wh = self.weight[{{D + 1, D + H}}]
   local bias_expandt = bias_expand[{{},{1, 3 * H}}]
+  local bias_expandt_b = nn.utils.addSingletonDimension(bias_expandt, 1):expand(T, N, 3 * H)
   local Wxt = Wx[{{},{1, 3 * H}}]
+  local Wxt_b = nn.utils.addSingletonDimension(Wxt, 1):expand(T, D, 3*H)
   local Wht = Wh[{{},{1, 3 * H}}]
   local bias_expandd = bias_expand[{{},{3 * H + 1, 3 * H + 3 * D}}]
+  local bias_expandd_b = nn.utils.addSingletonDimension(bias_expandd, 1):expand(T, N, 3 * D)
   local Wxd = Wx[{{},{3 * H + 1, 3 * H + 3 * D}}]
+  local Wxd_b = nn.utils.addSingletonDimension(Wxd, 1):expand(T, D, 3*D)
   local Whd = Wh[{{},{3 * H + 1, 3 * H + 3 * D}}]
 
   local h, ht = self.output, self.cell
   h:resize(N, T, D):zero()
   ht:resize(N, T, H):zero()
   local prev_ht = h0
-  self.gates:resize(N, T, 3 * H):zero()
-  self.gatesd:resize(N, T, 3 * D):zero()
+  self.gates:resize(N, T, 3 * H)
+  self.gatesd:resize(N, T, 3 * D):copy(bias_expandd_b)
+
+  self.gates:transpose(1,2):baddbmm(bias_expandt_b, x:transpose(1,2), Wxt_b)
+  self.gatesd:transpose(1,2)[{{}, {}, {2 * D}}]:baddbmm(x:transpose(1,2), Wxd_b[{{}, {}, {2 * D}}])
+
   for t = 1, T do
     local cur_x = x[{{}, t}]
     local next_ht = ht[{{}, t}]
     local cur_gates = self.gates[{{}, t}]
-    cur_gates:addmm(bias_expandt, cur_x, Wxt)
     cur_gates[{{}, {1, 2 * H}}]:addmm(prev_ht, Wht[{{}, {1, 2 * H}}])
     cur_gates[{{}, {1, 2 * H}}]:sigmoid()
     
@@ -161,10 +168,8 @@ function layer:updateOutput(input)
     
     local next_h = h[{{}, t}]
     local cur_gatesd = self.gatesd[{{}, t}]
-    cur_gatesd:addmm(bias_expandd, prev_ht, Whd)
-    cur_gatesd[{{}, {1, 2 * D}}]:addmm(cur_x, Wxd[{{}, {1, 2 * D}}])
+    cur_gatesd:addmm(prev_ht, Whd)
     cur_gatesd[{{}, {1, 2 * D}}]:sigmoid()
-    
     local ud = cur_gatesd[{{}, {1, D}}] --update gate : u = sig(Wx * x + Wh * prev_h + b)
     local rd = cur_gatesd[{{}, {D + 1, 2 * D}}] --reset gate : r = sig(Wx * x + Wh * prev_h + b)
     next_h:cmul(rd, cur_x) --temporary buffer : r . x
