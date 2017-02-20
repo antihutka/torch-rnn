@@ -139,6 +139,7 @@ function layer:updateOutput(input)
   local Wxd = Wx[{{},{3 * H + 1, 3 * H + 3 * D}}]
   local Wxd_b = nn.utils.addSingletonDimension(Wxd, 1):expand(T, D, 3*D)
   local Whd = Wh[{{},{3 * H + 1, 3 * H + 3 * D}}]
+  local Whd_b = nn.utils.addSingletonDimension(Whd, 1):expand(T, H, 3*D)
 
   local h, ht = self.output, self.cell
   h:resize(N, T, D):zero()
@@ -165,22 +166,18 @@ function layer:updateOutput(input)
     next_ht:addcmul(prev_ht,-1, u, prev_ht)
     next_ht:addcmul(u,hc)  --next_h = (1-u) . prev_h + u . hc   
     prev_ht = next_ht
-    
-    local next_h = h[{{}, t}]
-    local cur_gatesd = self.gatesd[{{}, t}]
-    cur_gatesd:addmm(prev_ht, Whd)
-    cur_gatesd[{{}, {1, 2 * D}}]:sigmoid()
-    local ud = cur_gatesd[{{}, {1, D}}] --update gate : u = sig(Wx * x + Wh * prev_h + b)
-    local rd = cur_gatesd[{{}, {D + 1, 2 * D}}] --reset gate : r = sig(Wx * x + Wh * prev_h + b)
-    next_h:cmul(rd, cur_x) --temporary buffer : r . x
-    cur_gatesd[{{}, {2 * D + 1, 3 * D}}]:addmm(next_h, Wxd[{{}, {2 * D + 1, 3 * D}}]) -- hc += Wx * r . prev_x
-    local hcd = cur_gatesd[{{}, {2 * D + 1, 3 * D}}]:tanh() --hidden candidate : hc = tanh(Wx * r .x + Wh *  prev_h + b)
-    next_h:addcmul(cur_x,-1, ud, cur_x)
-    next_h:addcmul(ud,hcd)  --next_h = (1-u) . x + u . hc   
-    --prev_h = next_h
-    
   end
-
+  
+  self.gatesd:transpose(1,2):baddbmm(ht:transpose(1,2), Whd_b)
+  self.gatesd[{{}, {}, {1, 2 * D}}]:sigmoid()
+  local ud_b = self.gatesd[{{}, {}, {1, D}}]
+  local rd_b = self.gatesd[{{}, {}, {D + 1, 2 * D}}]
+  local hcd_b = self.gatesd[{{}, {}, {2 * D + 1, 3 * D}}]
+  h:cmul(rd_b, x)
+  hcd_b:transpose(1,2):baddbmm(h:transpose(1,2), Wxd_b[{{}, {}, {2 * D + 1, 3 * D}}])
+  hcd_b:tanh()
+  h:addcmul(x, -1, ud_b, x)
+  h:addcmul(ud_b, hcd_b)
   self:swapout()
 
   return self.output
