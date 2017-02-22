@@ -149,7 +149,7 @@ function layer:updateOutput(input)
   self.gatesd:resize(N, T, 3 * D):copy(bias_expandd_b)
 
   self.gates:transpose(1,2):baddbmm(bias_expandt_b, x:transpose(1,2), Wxt_b)
-  self.gatesd:transpose(1,2)[{{}, {}, {2 * D}}]:baddbmm(x:transpose(1,2), Wxd_b[{{}, {}, {2 * D}}])
+  self.gatesd:transpose(1,2)[{{}, {}, {1, 2 * D}}]:baddbmm(x:transpose(1,2), Wxd_b[{{}, {}, {1, 2 * D}}])
 
   for t = 1, T do
     local next_ht = ht[{{}, t}]
