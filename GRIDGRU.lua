@@ -127,19 +127,16 @@ function layer:updateOutput(input)
   end
 
   local bias_expand = self.bias:view(1, 3 * H + 3 * D):expand(N, 3 * H + 3 * D)
+  local bias_expand_nt = self.bias:view(1, 3 * H + 3 * D):expand(N * T, 3 * H + 3 * D)
   local Wx = self.weight[{{1, D}}]
   local Wh = self.weight[{{D + 1, D + H}}]
-  local bias_expandt = bias_expand[{{},{1, 3 * H}}]
-  local bias_expandt_b = nn.utils.addSingletonDimension(bias_expandt, 1):expand(T, N, 3 * H)
+  local bias_expandt_nt = bias_expand_nt[{{},{1, 3 * H}}]
   local Wxt = Wx[{{},{1, 3 * H}}]
-  local Wxt_b = nn.utils.addSingletonDimension(Wxt, 1):expand(T, D, 3*H)
   local Wht = Wh[{{},{1, 3 * H}}]
   local bias_expandd = bias_expand[{{},{3 * H + 1, 3 * H + 3 * D}}]
   local bias_expandd_b = nn.utils.addSingletonDimension(bias_expandd, 1):expand(T, N, 3 * D)
   local Wxd = Wx[{{},{3 * H + 1, 3 * H + 3 * D}}]
-  local Wxd_b = nn.utils.addSingletonDimension(Wxd, 1):expand(T, D, 3*D)
   local Whd = Wh[{{},{3 * H + 1, 3 * H + 3 * D}}]
-  local Whd_b = nn.utils.addSingletonDimension(Whd, 1):expand(T, H, 3*D)
 
   local h, ht = self.output, self.cell
   h:resize(N, T, D):zero()
@@ -148,8 +145,14 @@ function layer:updateOutput(input)
   self.gates:resize(N, T, 3 * H)
   self.gatesd:resize(N, T, 3 * D):copy(bias_expandd_b)
 
-  self.gates:transpose(1,2):baddbmm(bias_expandt_b, x:transpose(1,2), Wxt_b)
-  self.gatesd:transpose(1,2)[{{}, {}, {1, 2 * D}}]:baddbmm(x:transpose(1,2), Wxd_b[{{}, {}, {1, 2 * D}}])
+  local gates_nt = self.gates:view(N * T, 3 * H)
+  local gatesd_nt = self.gatesd:view(N * T, 3 * D)
+  local x_nt = x:view(N * T, D)
+  local ht_nt = ht:view(N * T, H)
+  local h_nt = h:view(N * T, D)
+
+  gates_nt:addmm(bias_expandt_nt, x_nt, Wxt)
+  gatesd_nt[{{}, {1, 2 * D}}]:addmm(x_nt, Wxd[{{}, {1, 2 * D}}])
 
   for t = 1, T do
     local next_ht = ht[{{}, t}]
@@ -167,13 +170,13 @@ function layer:updateOutput(input)
     prev_ht = next_ht
   end
 
-  self.gatesd:transpose(1,2):baddbmm(ht:transpose(1,2), Whd_b)
+  gatesd_nt:addmm(ht_nt, Whd)
   self.gatesd[{{}, {}, {1, 2 * D}}]:sigmoid()
   local ud_b = self.gatesd[{{}, {}, {1, D}}]
   local rd_b = self.gatesd[{{}, {}, {D + 1, 2 * D}}]
-  local hcd_b = self.gatesd[{{}, {}, {2 * D + 1, 3 * D}}]
+  local hcd_b = gatesd_nt[{{}, {2 * D + 1, 3 * D}}]
   h:cmul(rd_b, x)
-  hcd_b:transpose(1,2):baddbmm(h:transpose(1,2), Wxd_b[{{}, {}, {2 * D + 1, 3 * D}}])
+  hcd_b:addmm(h_nt, Wxd[{{}, {2 * D + 1, 3 * D}}])
   hcd_b:tanh()
   h:addcmul(x, -1, ud_b, x)
   h:addcmul(ud_b, hcd_b)
