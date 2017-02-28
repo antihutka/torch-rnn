@@ -249,16 +249,16 @@ function layer:backward(input, gradOutput, scale)
     local grad_aud = grad_ad[{{}, {1, D}}]
     local grad_ard = grad_ad[{{}, {D + 1, 2 * D}}]
     local grad_ahcd = grad_ad[{{}, {2 * D + 1, 3 * D}}]
-    grad_next_hd:copy(grad_h[{{}, t}])
+    local grad_h_t = grad_h[{{}, t}]
     -- We will use grad_au as temporary buffer
     -- to compute grad_ahc.
     local cur_x = x[{{}, t}]
-    local grad_hcd = grad_aud:copy(grad_next_hd ):cmul(ud)
+    local grad_hcd = grad_aud:cmul(grad_h_t, ud)
     tanh_gradient(grad_ahcd, hcd, grad_hcd)
     local grad_rd = grad_aud:mm(grad_ahcd, Wxd[{{}, {2 * D + 1, 3 * D}}]:t() ):cmul(cur_x)
     sigmoid_gradient(grad_ard, rd, grad_rd)
-    temp_bufferd:copy(hcd):add(-1, cur_x)
-    sigmoid_gradient(grad_aud, ud, grad_next_hd)
+    temp_bufferd:add(hcd, -1, cur_x)
+    sigmoid_gradient(grad_aud, ud, grad_h_t)
     grad_aud:cmul(temp_bufferd)
     grad_h0:mm(grad_ad, Whd:t())
     grad_Whd:addmm(scale, prev_hd:t(), grad_ad)
@@ -266,9 +266,9 @@ function layer:backward(input, gradOutput, scale)
 
     grad_a_sumd:sum(grad_ad, 1)
     grad_bd:add(scale, grad_a_sumd)
-    temp_bufferd:copy(cur_x):cmul(rd)
+    temp_bufferd:cmul(cur_x, rd)
     grad_Wxd[{{}, {2 * D + 1, 3 * D}}]:addmm(scale, temp_bufferd:t(), grad_ahcd)
-    grad_next_hd:addcmul(-1, ud, grad_next_hd)
+    grad_next_hd:addcmul(grad_h_t, -1, ud, grad_next_hd)
     grad_next_hd:addmm(grad_ad[{{}, {1, 2 * D}}], Wxd[{{}, {1, 2 * D}}]:t())
     temp_bufferd:mm(grad_ad[{{}, {2 * D + 1, 3 * D}}], Wxd[{{}, {2 * D + 1, 3 * D}}]:t()):cmul(rd)
     grad_next_hd:add(temp_bufferd)
@@ -288,12 +288,12 @@ function layer:backward(input, gradOutput, scale)
     -- We will use grad_au as temporary buffer
     -- to compute grad_ahc.
 
-    local grad_hc = grad_au:copy(grad_next_h):cmul(u)
+    local grad_hc = grad_au:cmul(grad_next_h, u)
     tanh_gradient(grad_ahc, hc, grad_hc)
     local grad_r = grad_au:mm(grad_ahc, Wht[{{}, {2 * H + 1, 3 * H}}]:t() ):cmul(prev_h)
     sigmoid_gradient(grad_ar, r, grad_r)
 
-    temp_buffer:copy(hc):add(-1, prev_h)
+    temp_buffer:add(hc, -1, prev_h)
     sigmoid_gradient(grad_au, u, grad_next_h)
     grad_au:cmul(temp_buffer)
     grad_x[{{}, t}]:mm(grad_a, Wxt:t())
@@ -303,7 +303,7 @@ function layer:backward(input, gradOutput, scale)
 
     grad_a_sum:sum(grad_a, 1)
     grad_bt:add(scale, grad_a_sum)
-    temp_buffer:copy(prev_h):cmul(r)
+    temp_buffer:cmul(prev_h, r)
     grad_Wht[{{}, {2 * H + 1, 3 * H}}]:addmm(scale, temp_buffer:t(), grad_ahc)
     grad_next_h:addcmul(-1, u, grad_next_h)
     grad_next_h:addmm(grad_a[{{}, {1, 2 * H}}], Wht[{{}, {1, 2 * H}}]:t())
