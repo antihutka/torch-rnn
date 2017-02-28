@@ -185,6 +185,13 @@ function layer:updateOutput(input)
   return self.output
 end
 
+local function sigmoid_gradient(gradInput, output, gradOutput)
+  gradInput.THNN.Sigmoid_updateGradInput(nil, gradOutput:cdata(), gradInput:cdata(), output:cdata())
+end
+
+local function tanh_gradient(gradInput, output, gradOutput)
+  gradInput.THNN.Tanh_updateGradInput(nil, gradOutput:cdata(), gradInput:cdata(), output:cdata())
+end
 
 function layer:backward(input, gradOutput, scale)
   scale = scale or 1.0
@@ -247,11 +254,12 @@ function layer:backward(input, gradOutput, scale)
     -- to compute grad_ahc.
     local cur_x = x[{{}, t}]
     local grad_hcd = grad_aud:copy(grad_next_hd ):cmul(ud)
-    grad_ahcd:fill(1):addcmul(-1, hcd,hcd):cmul(grad_hcd)
+    tanh_gradient(grad_ahcd, hcd, grad_hcd)
     local grad_rd = grad_aud:mm(grad_ahcd, Wxd[{{}, {2 * D + 1, 3 * D}}]:t() ):cmul(cur_x)
-    grad_ard:fill(1):add(-1, rd):cmul(rd):cmul(grad_rd)
+    sigmoid_gradient(grad_ard, rd, grad_rd)
     temp_bufferd:copy(hcd):add(-1, cur_x)
-    grad_aud:fill(1):add(-1, ud):cmul(ud):cmul(temp_bufferd):cmul(grad_next_hd)
+    sigmoid_gradient(grad_aud, ud, grad_next_hd)
+    grad_aud:cmul(temp_bufferd)
     grad_h0:mm(grad_ad, Whd:t())
     grad_Whd:addmm(scale, prev_hd:t(), grad_ad)
     grad_Wxd[{{}, {1, 2 * D}}]:addmm(scale, cur_x:t(), grad_ad[{{}, {1, 2 * D}}])
@@ -281,12 +289,13 @@ function layer:backward(input, gradOutput, scale)
     -- to compute grad_ahc.
 
     local grad_hc = grad_au:copy(grad_next_h):cmul(u)
-    grad_ahc:fill(1):addcmul(-1, hc,hc):cmul(grad_hc)
+    tanh_gradient(grad_ahc, hc, grad_hc)
     local grad_r = grad_au:mm(grad_ahc, Wht[{{}, {2 * H + 1, 3 * H}}]:t() ):cmul(prev_h)
-    grad_ar:fill(1):add(-1, r):cmul(r):cmul(grad_r)
+    sigmoid_gradient(grad_ar, r, grad_r)
 
     temp_buffer:copy(hc):add(-1, prev_h)
-    grad_au:fill(1):add(-1, u):cmul(u):cmul(temp_buffer):cmul(grad_next_h)
+    sigmoid_gradient(grad_au, u, grad_next_h)
+    grad_au:cmul(temp_buffer)
     grad_x[{{}, t}]:mm(grad_a, Wxt:t())
     grad_x[{{}, t}]:add(grad_next_hd)
     grad_Wxt:addmm(scale, x[{{}, t}]:t(), grad_a)
