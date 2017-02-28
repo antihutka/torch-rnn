@@ -232,6 +232,17 @@ function layer:backward(input, gradOutput, scale)
   local grad_next_hd = self.buffer1d:resizeAs(x[{{}, 1}]):zero()
   local temp_bufferd = self.buffer2d:resizeAs(x[{{}, 1}]):zero()
   local grad_a_sumd = self.buffer3d:resize(1,3*D):zero()
+
+  local grad_ad = self.grad_a_bufferd:resize(N, 3 * D)
+  local grad_aud = grad_ad[{{}, {1, D}}]
+  local grad_ard = grad_ad[{{}, {D + 1, 2 * D}}]
+  local grad_ahcd = grad_ad[{{}, {2 * D + 1, 3 * D}}]
+
+  local grad_a = self.grad_a_buffer:resize(N, 3 * H)
+  local grad_au = grad_a[{{}, {1, H}}]
+  local grad_ar = grad_a[{{}, {H + 1, 2 * H}}]
+  local grad_ahc = grad_a[{{}, {2 * H + 1, 3 * H}}]
+
   for t = T, 1, -1 do
     local prev_h
     if t == 1 then
@@ -240,15 +251,11 @@ function layer:backward(input, gradOutput, scale)
       prev_h = ht[{{}, t - 1}]
     end
     local prev_hd = ht[{{}, t}]
-    --
+
     local ud = self.gatesd[{{}, t, {1, D}}]
     local rd = self.gatesd[{{}, t, {D + 1, 2 * D}}]
     local hcd = self.gatesd[{{}, t, {2 * D + 1, 3 * D}}]
 
-    local grad_ad = self.grad_a_bufferd:resize(N, 3 * D)
-    local grad_aud = grad_ad[{{}, {1, D}}]
-    local grad_ard = grad_ad[{{}, {D + 1, 2 * D}}]
-    local grad_ahcd = grad_ad[{{}, {2 * D + 1, 3 * D}}]
     local grad_h_t = grad_h[{{}, t}]
     -- We will use grad_au as temporary buffer
     -- to compute grad_ahc.
@@ -279,11 +286,6 @@ function layer:backward(input, gradOutput, scale)
     local u = self.gates[{{}, t, {1, H}}]
     local r = self.gates[{{}, t, {H + 1, 2 * H}}]
     local hc = self.gates[{{}, t, {2 * H + 1, 3 * H}}]
-
-    local grad_a = self.grad_a_buffer:resize(N, 3 * H)
-    local grad_au = grad_a[{{}, {1, H}}]
-    local grad_ar = grad_a[{{}, {H + 1, 2 * H}}]
-    local grad_ahc = grad_a[{{}, {2 * H + 1, 3 * H}}]
 
     -- We will use grad_au as temporary buffer
     -- to compute grad_ahc.
