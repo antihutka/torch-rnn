@@ -201,9 +201,11 @@ function layer:backward(input, gradOutput, scale)
 
   if not h0 then h0 = self.h0 end
 
-  local grad_h0, grad_x = self.grad_h0, self.grad_x
+  local grad_h0_tb, grad_x = self.grad_h0, self.grad_x
   local ht = self.cell
   local grad_h = gradOutput
+
+  local TB = 8 -- number of timesteps to batch operations for
 
   local N, T, D, H = self:_get_sizes(input, gradOutput)
   local Wx = self.weight[{{1, D}}]
@@ -224,19 +226,16 @@ function layer:backward(input, gradOutput, scale)
   local grad_Whd = grad_Wh[{{},{3 * H + 1, 3 * H + 3 * D}}]
   local grad_bd = grad_b[{{3 * H + 1, 3 * H + 3 * D}}]
 
-  grad_h0:resizeAs(h0)
+  grad_h0_tb:resize(TB, N, H)
   grad_x:resizeAs(x):zero()
   local grad_next_h = self.buffer1:resizeAs(h0):zero()
   local temp_buffer = self.buffer2:resizeAs(h0):zero()
   local grad_a_sum = self.buffer3:resize(1,3*H):zero()
   local grad_next_hd = self.buffer1d:resizeAs(x[{{}, 1}]):zero()
-  local temp_bufferd = self.buffer2d:resizeAs(x[{{}, 1}]):zero()
+  local temp_bufferd_tb = self.buffer2d:resize(TB, N, D)
   local grad_a_sumd = self.buffer3d:resize(1,3*D):zero()
 
-  local grad_ad = self.grad_a_bufferd:resize(N, 3 * D)
-  local grad_aud = grad_ad[{{}, {1, D}}]
-  local grad_ard = grad_ad[{{}, {D + 1, 2 * D}}]
-  local grad_ahcd = grad_ad[{{}, {2 * D + 1, 3 * D}}]
+  local grad_ad_tb = self.grad_a_bufferd:resize(TB, N, 3 * D):zero()
 
   local grad_a = self.grad_a_buffer:resize(N, 3 * H)
   local grad_au = grad_a[{{}, {1, H}}]
@@ -250,38 +249,63 @@ function layer:backward(input, gradOutput, scale)
     else
       prev_h = ht[{{}, t - 1}]
     end
-    local prev_hd = ht[{{}, t}]
-
     local ud = self.gatesd[{{}, t, {1, D}}]
-    local rd = self.gatesd[{{}, t, {D + 1, 2 * D}}]
-    local hcd = self.gatesd[{{}, t, {2 * D + 1, 3 * D}}]
+
+    local TBi = (t-1) % TB
+    local grad_ad = grad_ad_tb[{TBi + 1}]
+    local temp_bufferd = temp_bufferd_tb[TBi + 1]
+    local grad_h0 = grad_h0_tb[TBi + 1]
+
+    if TBi == TB - 1 or t == T then
+      local TBl = TBi + 1
+      local tfirst = t - TBi
+
+      local grad_ad_t = grad_ad_tb[{{1, TBl}, {}}]:transpose(1,2)
+      local grad_aud_t = grad_ad_t[{{}, {}, {1, D}}]
+      local grad_ard_t = grad_ad_t[{{}, {}, {D + 1, 2 * D}}]
+      local grad_ahcd_t = grad_ad_t[{{}, {}, {2 * D + 1, 3 * D}}]
+
+      local grad_ad_tn = grad_ad_tb[{{1, TBl}}]:view(TBl*N, 3*D)
+      local grad_aud_tn = grad_ad_tn[{{}, {1, D}}]
+      local grad_ahcd_tn = grad_ad_tn[{{}, {2 * D + 1, 3 * D}}]
+      local grad_h0_tn = grad_h0_tb[{{1, TBl}}]:view(TBl*N, H)
+
+      local temp_bufferd_t = temp_bufferd_tb[{{1, TBl}}]:transpose(1,2)
+      local temp_bufferd_tn = temp_bufferd_tb[{{1, TBl}}]:view(TBl * N, D)
+
+      local ud_t = self.gatesd[{{}, {tfirst, t}, {1, D}}]
+      local rd_t = self.gatesd[{{}, {tfirst, t}, {D + 1, 2 * D}}]
+      local hcd_t = self.gatesd[{{}, {tfirst, t}, {2 * D + 1, 3 * D}}]
+      local x_t = x[{{}, {tfirst, t}}]
+      local grad_h_t = grad_h[{{}, {tfirst, t}, {}}]
+
+      grad_aud_t:cmul(grad_h_t, ud_t)
+      tanh_gradient(grad_ahcd_t, hcd_t, grad_aud_t)
+      grad_aud_tn:mm(grad_ahcd_tn, Wxd[{{}, {2 * D + 1, 3 * D}}]:t())
+      grad_aud_t:cmul(x_t)
+      sigmoid_gradient(grad_ard_t, rd_t, grad_aud_t)
+      temp_bufferd_t:add(hcd_t, -1, x_t)
+      sigmoid_gradient(grad_aud_t, ud_t, grad_h_t)
+      grad_aud_t:cmul(temp_bufferd_t)
+      grad_h0_tn:mm(grad_ad_tn, Whd:t())
+      grad_Whd:addbmm(scale, ht[{{}, {tfirst, t}}]:transpose(1,2):transpose(2,3), grad_ad_tb[{{1, TBl}}])
+      grad_Wxd[{{}, {1, 2 * D}}]:addbmm(scale, x_t:transpose(1,2):transpose(2,3), grad_ad_tb[{{1, TBl}, {}, {1, 2 * D}}])
+      grad_a_sumd:sum(grad_ad_tn, 1)
+      grad_bd:add(scale, grad_a_sumd)
+      temp_bufferd_t:cmul(x_t, rd_t)
+      grad_Wxd[{{}, {2 * D + 1, 3 * D}}]:addbmm(scale, temp_bufferd_t:transpose(1,2):transpose(2,3), grad_ad_tb[{{1, TBl}, {}, {2 * D + 1, 3 * D}}])
+      temp_bufferd_tn:mm(grad_ahcd_tn, Wxd[{{}, {2 * D + 1, 3 * D}}]:t())
+      temp_bufferd_t:cmul(rd_t)
+    end
 
     local grad_h_t = grad_h[{{}, t}]
     -- We will use grad_au as temporary buffer
     -- to compute grad_ahc.
-    local cur_x = x[{{}, t}]
-    local grad_hcd = grad_aud:cmul(grad_h_t, ud)
-    tanh_gradient(grad_ahcd, hcd, grad_hcd)
-    local grad_rd = grad_aud:mm(grad_ahcd, Wxd[{{}, {2 * D + 1, 3 * D}}]:t() ):cmul(cur_x)
-    sigmoid_gradient(grad_ard, rd, grad_rd)
-    temp_bufferd:add(hcd, -1, cur_x)
-    sigmoid_gradient(grad_aud, ud, grad_h_t)
-    grad_aud:cmul(temp_bufferd)
-    grad_h0:mm(grad_ad, Whd:t())
-    grad_Whd:addmm(scale, prev_hd:t(), grad_ad)
-    grad_Wxd[{{}, {1, 2 * D}}]:addmm(scale, cur_x:t(), grad_ad[{{}, {1, 2 * D}}])
-
-    grad_a_sumd:sum(grad_ad, 1)
-    grad_bd:add(scale, grad_a_sumd)
-    temp_bufferd:cmul(cur_x, rd)
-    grad_Wxd[{{}, {2 * D + 1, 3 * D}}]:addmm(scale, temp_bufferd:t(), grad_ahcd)
     grad_next_hd:addcmul(grad_h_t, -1, ud, grad_next_hd)
     grad_next_hd:addmm(grad_ad[{{}, {1, 2 * D}}], Wxd[{{}, {1, 2 * D}}]:t())
-    temp_bufferd:mm(grad_ad[{{}, {2 * D + 1, 3 * D}}], Wxd[{{}, {2 * D + 1, 3 * D}}]:t()):cmul(rd)
     grad_next_hd:add(temp_bufferd)
-    --
+
     grad_next_h:add(grad_h0)
-    --grad_next_h:clamp(-5,5)
 
     local u = self.gates[{{}, t, {1, H}}]
     local r = self.gates[{{}, t, {H + 1, 2 * H}}]
@@ -314,8 +338,8 @@ function layer:backward(input, gradOutput, scale)
   end
 
   if self._return_grad_h0 then
-    grad_h0:copy(grad_next_h)
-    self.gradInput = {self.grad_h0, self.grad_x}
+    grad_h0_tb[1]:copy(grad_next_h)
+    self.gradInput = {self.grad_h0[1], self.grad_x}
   else
     self.gradInput = self.grad_x
   end
