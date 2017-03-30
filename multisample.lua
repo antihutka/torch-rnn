@@ -48,7 +48,7 @@ timer:reset()
 
 for i = 1, opt.length do
   for j = 1, opt.count do
-    local ni = model:sampleFromScores(outputs[{{j}}], opt.temperature, 0)
+    local ni = model:sampleFromScores(outputs[{{j}}], opt.temperature, 1)
     if ni == newline_idx then
       if opt.verbose > 0 then print(string.format("%3d:%s", j, outtext[j])) end
       outfiles[j]:write(outtext[j] .. '\n')
