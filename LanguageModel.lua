@@ -5,6 +5,7 @@ require 'VanillaRNN'
 require 'LSTM'
 require 'GRU'
 require 'GRIDGRU'
+require 'History'
 
 local utils = require 'util.utils'
 
@@ -27,16 +28,19 @@ function LM:__init(kwargs)
   self.num_layers = utils.get_kwarg(kwargs, 'num_layers')
   self.dropout = utils.get_kwarg(kwargs, 'dropout')
   self.batchnorm = utils.get_kwarg(kwargs, 'batchnorm')
+  self.history_depth = utils.get_kwarg(kwargs, 'history_depth')
 
-  local V, D, H = self.vocab_size, self.wordvec_dim, self.rnn_size
+  local V, D, H, HD = self.vocab_size, self.wordvec_dim, self.rnn_size, self.history_depth
 
   self.rnns = {}
   self.net = nn.Sequential()
 
   self.net:add(nn.LookupTable(V, D))
+  if HD > 0 then self.net:add(nn.History(HD)) end
+
   for i = 1, self.num_layers do
     local prev_dim = H
-    if i == 1 then prev_dim = D end
+    if i == 1 then prev_dim = D * (HD + 1) end
     local rnn
     if self.model_type == 'rnn' then
       rnn = nn.VanillaRNN(prev_dim, H)
@@ -45,7 +49,7 @@ function LM:__init(kwargs)
     elseif self.model_type == 'gru' then
       rnn = nn.GRU(prev_dim, H)
     elseif self.model_type == 'gridgru' then
-      rnn = nn.GRIDGRU(D, H)
+      rnn = nn.GRIDGRU(D * (HD + 1), H)
     end
     rnn.remember_states = true
     table.insert(self.rnns, rnn)
@@ -59,7 +63,7 @@ function LM:__init(kwargs)
   end
 
   if self.model_type == 'gridgru' then
-    self.net:add(nn.TemporalAdapter(nn.Linear(D, V)))
+    self.net:add(nn.TemporalAdapter(nn.Linear(D * (HD + 1), V)))
   else
     self.net:add(nn.TemporalAdapter(nn.Linear(H, V)))
   end
