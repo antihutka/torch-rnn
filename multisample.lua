@@ -30,6 +30,7 @@ local outfiles = {}
 for i = 1, opt.count do
   outtext[i] = ""
   outfiles[i] = io.open(string.gsub(opt.output_file, "#", string.format("%03d", i)), "w")
+  outfiles[i]:setvbuf('no')
 end
 
 if opt.bytes == 1 then model:convertTables() end
