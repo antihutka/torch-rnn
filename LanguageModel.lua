@@ -5,6 +5,7 @@ require 'VanillaRNN'
 require 'LSTM'
 require 'GRU'
 require 'GRIDGRU'
+require 'GRIDGRUM'
 require 'History'
 
 local utils = require 'util.utils'
@@ -50,19 +51,21 @@ function LM:__init(kwargs)
       rnn = nn.GRU(prev_dim, H)
     elseif self.model_type == 'gridgru' then
       rnn = nn.GRIDGRU(D * (HD + 1), H)
+    elseif self.model_type == 'gridgrum' then
+      rnn = nn.GRIDGRUM(D * (HD + 1), H, 2)
     end
     rnn.remember_states = true
     table.insert(self.rnns, rnn)
     self.net:add(rnn)
     if self.batchnorm == 1 then
-      self.net:add(nn.TemporalAdapter(nn.BatchNormalization((self.model_type == 'gridgru') and D or H)))
+      self.net:add(nn.TemporalAdapter(nn.BatchNormalization((self.model_type == 'gridgru' or self.model_type == 'gridgrum') and D or H)))
     end
     if self.dropout > 0 then
       self.net:add(nn.Dropout(self.dropout, nil, true))
     end
   end
 
-  if self.model_type == 'gridgru' then
+  if self.model_type == 'gridgru' or self.model_type == 'gridgrum' then
     self.net:add(nn.TemporalAdapter(nn.Linear(D * (HD + 1), V)))
   else
     self.net:add(nn.TemporalAdapter(nn.Linear(H, V)))
