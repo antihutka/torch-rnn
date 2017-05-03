@@ -6,6 +6,7 @@ require 'LSTM'
 require 'GRU'
 require 'GRIDGRU'
 require 'GRIDGRUM'
+require 'GRIDGRULR'
 require 'History'
 
 local utils = require 'util.utils'
@@ -30,8 +31,9 @@ function LM:__init(kwargs)
   self.dropout = utils.get_kwarg(kwargs, 'dropout')
   self.batchnorm = utils.get_kwarg(kwargs, 'batchnorm')
   self.history_depth = utils.get_kwarg(kwargs, 'history_depth')
+  self.rank = utils.get_kwarg(kwargs, 'rank')
 
-  local V, D, H, HD = self.vocab_size, self.wordvec_dim, self.rnn_size, self.history_depth
+  local V, D, H, HD, R = self.vocab_size, self.wordvec_dim, self.rnn_size, self.history_depth, self.rank
 
   self.rnns = {}
   self.net = nn.Sequential()
@@ -53,19 +55,21 @@ function LM:__init(kwargs)
       rnn = nn.GRIDGRU(D * (HD + 1), H)
     elseif self.model_type == 'gridgrum' then
       rnn = nn.GRIDGRUM(D * (HD + 1), H, 2)
+    elseif self.model_type == 'gridgrulr' then
+      rnn = nn.GRIDGRULR(D * (HD + 1), H, R)
     end
     rnn.remember_states = true
     table.insert(self.rnns, rnn)
     self.net:add(rnn)
     if self.batchnorm == 1 then
-      self.net:add(nn.TemporalAdapter(nn.BatchNormalization((self.model_type == 'gridgru' or self.model_type == 'gridgrum') and D or H)))
+      self.net:add(nn.TemporalAdapter(nn.BatchNormalization((self.model_type == 'gridgru' or self.model_type == 'gridgrum' or self.model_type == 'gridgrulr') and D or H)))
     end
     if self.dropout > 0 then
       self.net:add(nn.Dropout(self.dropout, nil, true))
     end
   end
 
-  if self.model_type == 'gridgru' or self.model_type == 'gridgrum' then
+  if self.model_type == 'gridgru' or self.model_type == 'gridgrum' or self.model_type == 'gridgrulr' then
     self.net:add(nn.TemporalAdapter(nn.Linear(D * (HD + 1), V)))
   else
     self.net:add(nn.TemporalAdapter(nn.Linear(H, V)))
