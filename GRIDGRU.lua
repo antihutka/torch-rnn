@@ -96,6 +96,16 @@ function layer:_get_sizes(input, gradOutput)
   return N, T, D, H
 end
 
+function layer:_split_weights(w)
+  local H, D = self.hidden_dim, self.input_dim
+  local Wx = w[{{1, D}}]
+  local Wh = w[{{D + 1, D + H}}]
+  local Wxt = Wx[{{},{1, 3 * H}}]
+  local Wht = Wh[{{},{1, 3 * H}}]
+  local Wxd = Wx[{{},{3 * H + 1, 3 * H + 3 * D}}]
+  local Whd = Wh[{{},{3 * H + 1, 3 * H + 3 * D}}]
+  return Wxt, Wht, Wxd, Whd
+end
 
 --[[
 Input:
@@ -128,15 +138,10 @@ function layer:updateOutput(input)
 
   local bias_expand = self.bias:view(1, 3 * H + 3 * D):expand(N, 3 * H + 3 * D)
   local bias_expand_nt = self.bias:view(1, 3 * H + 3 * D):expand(N * T, 3 * H + 3 * D)
-  local Wx = self.weight[{{1, D}}]
-  local Wh = self.weight[{{D + 1, D + H}}]
+  local Wxt, Wht, Wxd, Whd = self:_split_weights(self.weight)
   local bias_expandt_nt = bias_expand_nt[{{},{1, 3 * H}}]
-  local Wxt = Wx[{{},{1, 3 * H}}]
-  local Wht = Wh[{{},{1, 3 * H}}]
   local bias_expandd = bias_expand[{{},{3 * H + 1, 3 * H + 3 * D}}]
   local bias_expandd_b = nn.utils.addSingletonDimension(bias_expandd, 1):expand(T, N, 3 * D)
-  local Wxd = Wx[{{},{3 * H + 1, 3 * H + 3 * D}}]
-  local Whd = Wh[{{},{3 * H + 1, 3 * H + 3 * D}}]
 
   local h, ht = self.output, self.cell
   h:resize(N, T, D):zero()
@@ -208,22 +213,11 @@ function layer:backward(input, gradOutput, scale)
   local TB = 8 -- number of timesteps to batch operations for
 
   local N, T, D, H = self:_get_sizes(input, gradOutput)
-  local Wx = self.weight[{{1, D}}]
-  local Wh = self.weight[{{D + 1, D + H}}]
-  local grad_Wx = self.gradWeight[{{1, D}}]
-  local grad_Wh = self.gradWeight[{{D + 1, D + H}}]
+  local Wxt, Wht, Wxd, Whd = self:_split_weights(self.weight)
+  local grad_Wxt, grad_Wht, grad_Wxd, grad_Whd = self:_split_weights(self.gradWeight)
+
   local grad_b = self.gradBias
-
-  local Wxt = Wx[{{},{1, 3 * H}}]
-  local Wht = Wh[{{},{1, 3 * H}}]
-  local grad_Wxt = grad_Wx[{{},{1, 3 * H}}]
-  local grad_Wht = grad_Wh[{{},{1, 3 * H}}]
   local grad_bt = grad_b[{{1, 3 * H}}]
-
-  local Wxd = Wx[{{},{3 * H + 1, 3 * H + 3 * D}}]
-  local Whd = Wh[{{},{3 * H + 1, 3 * H + 3 * D}}]
-  local grad_Wxd = grad_Wx[{{},{3 * H + 1, 3 * H + 3 * D}}]
-  local grad_Whd = grad_Wh[{{},{3 * H + 1, 3 * H + 3 * D}}]
   local grad_bd = grad_b[{{3 * H + 1, 3 * H + 3 * D}}]
 
   grad_h0_tb:resize(TB, N, H)
