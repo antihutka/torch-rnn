@@ -101,10 +101,11 @@ function layer:_split_weights(w)
   local Wx = w[{{1, D}}]
   local Wh = w[{{D + 1, D + H}}]
   local Wxt = Wx[{{},{1, 3 * H}}]
-  local Wht = Wh[{{},{1, 3 * H}}]
+  local Whtg = Wh[{{},{1, 2 * H}}]
+  local Whtc = Wh[{{},{2 * H + 1, 3 * H}}]
   local Wxd = Wx[{{},{3 * H + 1, 3 * H + 3 * D}}]
   local Whd = Wh[{{},{3 * H + 1, 3 * H + 3 * D}}]
-  return Wxt, Wht, Wxd, Whd
+  return Wxt, Whtg, Whtc, Wxd, Whd
 end
 
 --[[
@@ -138,7 +139,7 @@ function layer:updateOutput(input)
 
   local bias_expand = self.bias:view(1, 3 * H + 3 * D):expand(N, 3 * H + 3 * D)
   local bias_expand_nt = self.bias:view(1, 3 * H + 3 * D):expand(N * T, 3 * H + 3 * D)
-  local Wxt, Wht, Wxd, Whd = self:_split_weights(self.weight)
+  local Wxt, Whtg, Whtc, Wxd, Whd = self:_split_weights(self.weight)
   local bias_expandt_nt = bias_expand_nt[{{},{1, 3 * H}}]
   local bias_expandd = bias_expand[{{},{3 * H + 1, 3 * H + 3 * D}}]
   local bias_expandd_b = nn.utils.addSingletonDimension(bias_expandd, 1):expand(T, N, 3 * D)
@@ -162,14 +163,18 @@ function layer:updateOutput(input)
   for t = 1, T do
     local next_ht = ht[{{}, t}]
     local cur_gates = self.gates[{{}, t}]
-    cur_gates[{{}, {1, 2 * H}}]:addmm(prev_ht, Wht[{{}, {1, 2 * H}}])
-    cur_gates[{{}, {1, 2 * H}}]:sigmoid()
+    local cur_gates_g = cur_gates[{{}, {1, 2 * H}}]
+    local cur_gates_c = cur_gates[{{}, {2 * H + 1, 3 * H}}]
+
+    cur_gates_g:addmm(prev_ht, Whtg)
+    cur_gates_g:sigmoid()
 
     local u = cur_gates[{{}, {1, H}}] --update gate : u = sig(Wx * x + Wh * prev_h + b)
     local r = cur_gates[{{}, {H + 1, 2 * H}}] --reset gate : r = sig(Wx * x + Wh * prev_h + b)
     next_ht:cmul(r, prev_ht) --temporary buffer : r . prev_h
-    cur_gates[{{}, {2 * H + 1, 3 * H}}]:addmm(next_ht, Wht[{{}, {2 * H + 1, 3 * H}}]) -- hc += Wh * r . prev_h
-    local hc = cur_gates[{{}, {2 * H + 1, 3 * H}}]:tanh() --hidden candidate : hc = tanh(Wx * x + Wh * r . prev_h + b)
+    local hc = cur_gates[{{}, {2 * H + 1, 3 * H}}]
+    hc:addmm(next_ht, Whtc) -- hc += Wh * r . prev_h
+    hc:tanh() --hidden candidate : hc = tanh(Wx * x + Wh * r . prev_h + b)
     next_ht:addcmul(prev_ht,-1, u, prev_ht)
     next_ht:addcmul(u,hc)  --next_h = (1-u) . prev_h + u . hc
     prev_ht = next_ht
@@ -213,8 +218,8 @@ function layer:backward(input, gradOutput, scale)
   local TB = 8 -- number of timesteps to batch operations for
 
   local N, T, D, H = self:_get_sizes(input, gradOutput)
-  local Wxt, Wht, Wxd, Whd = self:_split_weights(self.weight)
-  local grad_Wxt, grad_Wht, grad_Wxd, grad_Whd = self:_split_weights(self.gradWeight)
+  local Wxt, Whtg, Whtc, Wxd, Whd = self:_split_weights(self.weight)
+  local grad_Wxt, grad_Whtg, grad_Whtc, grad_Wxd, grad_Whd = self:_split_weights(self.gradWeight)
 
   local grad_b = self.gradBias
   local grad_bt = grad_b[{{1, 3 * H}}]
@@ -310,7 +315,7 @@ function layer:backward(input, gradOutput, scale)
 
     local grad_hc = grad_au:cmul(grad_next_h, u)
     tanh_gradient(grad_ahc, hc, grad_hc)
-    local grad_r = grad_au:mm(grad_ahc, Wht[{{}, {2 * H + 1, 3 * H}}]:t() ):cmul(prev_h)
+    local grad_r = grad_au:mm(grad_ahc, Whtc:t() ):cmul(prev_h)
     sigmoid_gradient(grad_ar, r, grad_r)
 
     temp_buffer:add(hc, -1, prev_h)
@@ -319,15 +324,15 @@ function layer:backward(input, gradOutput, scale)
     grad_x[{{}, t}]:mm(grad_a, Wxt:t())
     grad_x[{{}, t}]:add(grad_next_hd)
     grad_Wxt:addmm(scale, x[{{}, t}]:t(), grad_a)
-    grad_Wht[{{}, {1, 2 * H}}]:addmm(scale, prev_h:t(), grad_a[{{}, {1, 2 * H}}])
+    grad_Whtg:addmm(scale, prev_h:t(), grad_a[{{}, {1, 2 * H}}])
 
     grad_a_sum:sum(grad_a, 1)
     grad_bt:add(scale, grad_a_sum)
     temp_buffer:cmul(prev_h, r)
-    grad_Wht[{{}, {2 * H + 1, 3 * H}}]:addmm(scale, temp_buffer:t(), grad_ahc)
+    grad_Whtc:addmm(scale, temp_buffer:t(), grad_ahc)
     grad_next_h:addcmul(-1, u, grad_next_h)
-    grad_next_h:addmm(grad_a[{{}, {1, 2 * H}}], Wht[{{}, {1, 2 * H}}]:t())
-    temp_buffer:mm(grad_a[{{}, {2 * H + 1, 3 * H}}], Wht[{{}, {2 * H + 1, 3 * H}}]:t()):cmul(r)
+    grad_next_h:addmm(grad_a[{{}, {1, 2 * H}}], Whtg:t())
+    temp_buffer:mm(grad_a[{{}, {2 * H + 1, 3 * H}}], Whtc:t()):cmul(r)
     grad_next_h:add(temp_buffer)
   end
 
