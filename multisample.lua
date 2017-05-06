@@ -16,6 +16,8 @@ cmd:option('-count', 16)
 cmd:option('-print_every', 10)
 cmd:option('-output_file', 'outputs/output-#.txt')
 cmd:option('-verbose', 0)
+cmd:option('-forcelayer', 0)
+cmd:option('-forcevalue', 1)
 local opt = cmd:parse(arg)
 
 local timer = torch.Timer()
@@ -59,6 +61,14 @@ for i = 1, opt.length do
     end
     input[{j,1}] = ni
   end
+
+  if opt.forcelayer > 0 then
+    for i = 1, opt.count do
+      local l = model.rnns[opt.forcelayer]:getState(i)
+      l[i] = opt.forcevalue
+    end
+  end
+
   outputs = model:forward(input)
   if i % opt.print_every == 0 then
     local t, b = timer:time().real, opt.count * opt.print_every
