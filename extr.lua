@@ -11,9 +11,18 @@ local opt = cmd:parse(arg)
 local first_iter = 0
 local val_num = 0
 local val_sum = 0
+local pv_extra = 0
+local pv_last = -1
 
 function pv(i, v)
-  --print("pv(" .. i .. "," .. v .. ")")
+  --print("pv(" .. i .. "," .. v .. ") last=" .. pv_last .. " extra=" .. pv_extra)
+
+  if i + pv_extra < pv_last then
+    --print("bad order!")
+    pv_extra = pv_last
+  end
+  i = i + pv_extra
+
   if i + 1 > first_iter + opt.avg and val_num > 0 then
     print(first_iter .. "\t" .. (val_sum / val_num))
     first_iter = 0
@@ -25,6 +34,7 @@ function pv(i, v)
     val_num = val_num + 1
     val_sum = val_sum + v
   end
+  pv_last = i
 end
 
 local jsons = {}
