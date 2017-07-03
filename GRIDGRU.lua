@@ -226,7 +226,7 @@ function layer:backward(input, gradOutput, scale)
   local grad_bd = grad_b[{{3 * H + 1, 3 * H + 3 * D}}]
 
   grad_h0_tb:resize(TB, N, H)
-  grad_x:resizeAs(x):zero()
+  grad_x:resize(T, N, D):zero()
   local grad_next_h = self.buffer1:resizeAs(h0):zero()
   local temp_buffer = self.buffer2:resizeAs(h0):zero()
   local grad_a_sum = self.buffer3:resize(1,3*H):zero()
@@ -236,10 +236,7 @@ function layer:backward(input, gradOutput, scale)
 
   local grad_ad_tb = self.grad_a_bufferd:resize(TB, N, 3 * D):zero()
 
-  local grad_a = self.grad_a_buffer:resize(N, 3 * H)
-  local grad_au = grad_a[{{}, {1, H}}]
-  local grad_ar = grad_a[{{}, {H + 1, 2 * H}}]
-  local grad_ahc = grad_a[{{}, {2 * H + 1, 3 * H}}]
+  local grad_a_tb = self.grad_a_buffer:resize(TB, N, 3 * H)
 
   for t = T, 1, -1 do
     local prev_h
@@ -254,6 +251,11 @@ function layer:backward(input, gradOutput, scale)
     local grad_ad = grad_ad_tb[{TBi + 1}]
     local temp_bufferd = temp_bufferd_tb[TBi + 1]
     local grad_h0 = grad_h0_tb[TBi + 1]
+
+    local grad_a = grad_a_tb[TBi + 1]
+    local grad_au = grad_a[{{}, {1, H}}]
+    local grad_ar = grad_a[{{}, {H + 1, 2 * H}}]
+    local grad_ahc = grad_a[{{}, {2 * H + 1, 3 * H}}]
 
     if TBi == TB - 1 or t == T then
       local TBl = TBi + 1
@@ -321,9 +323,7 @@ function layer:backward(input, gradOutput, scale)
     temp_buffer:add(hc, -1, prev_h)
     sigmoid_gradient(grad_au, u, grad_next_h)
     grad_au:cmul(temp_buffer)
-    grad_x[{{}, t}]:mm(grad_a, Wxt:t())
-    grad_x[{{}, t}]:add(grad_next_hd)
-    grad_Wxt:addmm(scale, x[{{}, t}]:t(), grad_a)
+    grad_x[{t, {}}]:copy(grad_next_hd)
     grad_Whtg:addmm(scale, prev_h:t(), grad_a[{{}, {1, 2 * H}}])
 
     grad_a_sum:sum(grad_a, 1)
@@ -334,13 +334,22 @@ function layer:backward(input, gradOutput, scale)
     grad_next_h:addmm(grad_a[{{}, {1, 2 * H}}], Whtg:t())
     temp_buffer:mm(grad_a[{{}, {2 * H + 1, 3 * H}}], Whtc:t()):cmul(r)
     grad_next_h:add(temp_buffer)
+
+    if TBi == 0 then
+      local tlast = t + TB - 1
+      if tlast > T then tlast = T end
+      local TBl = tlast - t + 1
+      grad_a_t = grad_a_tb[{{1, TBl}}]
+      grad_x[{{t, tlast}, {}}]:view(TBl * N, D):addmm(grad_a_tb[{{1, TBl}}]:view(TBl * N, 3 * H), Wxt:t())
+      grad_Wxt:addbmm(scale, x[{{}, {t, tlast}}]:transpose(1,2):transpose(2,3), grad_a_tb[{{1, TBl}}])
+    end
   end
 
   if self._return_grad_h0 then
     grad_h0_tb[1]:copy(grad_next_h)
-    self.gradInput = {self.grad_h0[1], self.grad_x}
+    self.gradInput = {self.grad_h0[1], self.grad_x:transpose(1,2)}
   else
-    self.gradInput = self.grad_x
+    self.gradInput = self.grad_x:transpose(1,2)
   end
 
   self:swapout()
