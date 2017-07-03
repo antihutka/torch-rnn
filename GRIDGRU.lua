@@ -230,7 +230,7 @@ function layer:backward(input, gradOutput, scale)
   local grad_next_h = self.buffer1:resizeAs(h0):zero()
   local temp_buffer = self.buffer2:resizeAs(h0):zero()
   local grad_a_sum = self.buffer3:resize(1,3*H):zero()
-  local grad_next_hd = self.buffer1d:resizeAs(x[{{}, 1}]):zero()
+  local grad_next_hd_tb = self.buffer1d:resize(TB, N, D):zero()
   local temp_bufferd_tb = self.buffer2d:resize(TB, N, D)
   local grad_a_sumd = self.buffer3d:resize(1,3*D):zero()
 
@@ -251,6 +251,7 @@ function layer:backward(input, gradOutput, scale)
     local grad_ad = grad_ad_tb[{TBi + 1}]
     local temp_bufferd = temp_bufferd_tb[TBi + 1]
     local grad_h0 = grad_h0_tb[TBi + 1]
+    local grad_next_hd = grad_next_hd_tb[TBi + 1]
 
     local grad_a = grad_a_tb[TBi + 1]
     local grad_au = grad_a[{{}, {1, H}}]
@@ -302,10 +303,6 @@ function layer:backward(input, gradOutput, scale)
     local grad_h_t = grad_h[{{}, t}]
     -- We will use grad_au as temporary buffer
     -- to compute grad_ahc.
-    grad_next_hd:addcmul(grad_h_t, -1, ud, grad_next_hd)
-    grad_next_hd:addmm(grad_ad[{{}, {1, 2 * D}}], Wxd[{{}, {1, 2 * D}}]:t())
-    grad_next_hd:add(temp_bufferd)
-
     grad_next_h:add(grad_h0)
 
     local u = self.gates[{{}, t, {1, H}}]
@@ -323,7 +320,6 @@ function layer:backward(input, gradOutput, scale)
     temp_buffer:add(hc, -1, prev_h)
     sigmoid_gradient(grad_au, u, grad_next_h)
     grad_au:cmul(temp_buffer)
-    grad_x[{t, {}}]:copy(grad_next_hd)
     grad_Whtg:addmm(scale, prev_h:t(), grad_a[{{}, {1, 2 * H}}])
 
     grad_a_sum:sum(grad_a, 1)
@@ -339,8 +335,13 @@ function layer:backward(input, gradOutput, scale)
       local tlast = t + TB - 1
       if tlast > T then tlast = T end
       local TBl = tlast - t + 1
-      grad_a_t = grad_a_tb[{{1, TBl}}]
-      grad_x[{{t, tlast}, {}}]:view(TBl * N, D):addmm(grad_a_tb[{{1, TBl}}]:view(TBl * N, 3 * H), Wxt:t())
+
+      local grad_h_tb = grad_h[{{}, {t, tlast}}]
+      local grad_next_hd_t = grad_next_hd_tb[{{1, TBl}}]
+      grad_next_hd_t:transpose(1,2):addcmul(grad_h_tb, -1, self.gatesd[{{}, {t, tlast}, {1, D}}], grad_h_tb)
+      grad_next_hd_t:view(TBl * N, D):addmm(grad_ad_tb[{{1, TBl}}]:view(TBl * N, 3 * D)[{{}, {1, 2 * D}}], Wxd[{{}, {1, 2 * D}}]:t())
+      grad_next_hd_t:add(temp_bufferd_tb[{{1, TBl}}])
+      grad_x[{{t, tlast}, {}}]:view(TBl * N, D):addmm(grad_next_hd_t:view(TBl * N, D), grad_a_tb[{{1, TBl}}]:view(TBl * N, 3 * H), Wxt:t())
       grad_Wxt:addbmm(scale, x[{{}, {t, tlast}}]:transpose(1,2):transpose(2,3), grad_a_tb[{{1, TBl}}])
     end
   end
