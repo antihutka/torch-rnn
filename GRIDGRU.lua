@@ -164,7 +164,6 @@ function layer:updateOutput(input)
     local next_ht = ht[{{}, t}]
     local cur_gates = self.gates[{{}, t}]
     local cur_gates_g = cur_gates[{{}, {1, 2 * H}}]
-    local cur_gates_c = cur_gates[{{}, {2 * H + 1, 3 * H}}]
 
     cur_gates_g:addmm(prev_ht, Whtg)
     cur_gates_g:sigmoid()
@@ -245,13 +244,9 @@ function layer:backward(input, gradOutput, scale)
     else
       prev_h = ht[{{}, t - 1}]
     end
-    local ud = self.gatesd[{{}, t, {1, D}}]
 
     local TBi = (t-1) % TB
-    local grad_ad = grad_ad_tb[{TBi + 1}]
-    local temp_bufferd = temp_bufferd_tb[TBi + 1]
     local grad_h0 = grad_h0_tb[TBi + 1]
-    local grad_next_hd = grad_next_hd_tb[TBi + 1]
 
     local grad_a = grad_a_tb[TBi + 1]
     local grad_au = grad_a[{{}, {1, H}}]
@@ -300,7 +295,6 @@ function layer:backward(input, gradOutput, scale)
       temp_bufferd_t:cmul(rd_t)
     end
 
-    local grad_h_t = grad_h[{{}, t}]
     -- We will use grad_au as temporary buffer
     -- to compute grad_ahc.
     grad_next_h:add(grad_h0)
