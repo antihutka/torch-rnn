@@ -202,6 +202,7 @@ local num_iterations = opt.max_epochs * num_train
 local avg_loss = 0
 local trend = 0
 local iteration_timer = torch.Timer()
+local val_loss_best, val_loss_best_at
 model:training()
 for i = start_i + 1, num_iterations do
   local epoch = math.floor(i / num_train) + 1
@@ -213,7 +214,8 @@ for i = start_i + 1, num_iterations do
     -- Maybe decay learning rate
     if epoch % opt.lr_decay_every == 0 then
       local old_lr = optim_config.learningRate
-      optim_config = {learningRate = old_lr * opt.lr_decay_factor}
+      -- optim_config = {learningRate = old_lr * opt.lr_decay_factor}
+      optim_config.learningRate = old_lr * opt.lr_decay_factor
       print('Changing learning rate to ' .. optim_config.learningRate)
     end
   end
@@ -258,7 +260,11 @@ for i = start_i + 1, num_iterations do
       val_loss = val_loss + crit:forward(scores, yv)
     end
     val_loss = val_loss / num_val
-    print('val_loss = ', val_loss)
+    if (not val_loss_best) or (val_loss_best > val_loss) then
+      val_loss_best = val_loss
+      val_loss_best_at = i
+    end
+    print(string.format("val_loss = %.6f, best = %.6f @ %d", val_loss, val_loss_best, val_loss_best_at))
     table.insert(val_loss_history, val_loss)
     table.insert(val_loss_history_it, i)
     model:resetStates()
