@@ -4,6 +4,8 @@ require 'nn'
 require 'LanguageModel'
 require 'util.DataLoader'
 
+torch.setdefaulttensortype('torch.FloatTensor')
+
 local utils = require 'util.utils'
 
 
@@ -13,6 +15,9 @@ cmd:option('-checkpoint', '')
 cmd:option('-split', 'val')
 cmd:option('-gpu', 0)
 cmd:option('-gpu_backend', 'cuda')
+cmd:option('-input_h5', '')
+cmd:option('-seq_length', 0)
+cmd:option('-batch_size', 0)
 local opt = cmd:parse(arg)
 
 
@@ -41,6 +46,11 @@ local model = checkpoint.model
 model:type(dtype)
 local crit = nn.CrossEntropyCriterion():type(dtype)
 
+if opt.input_h5 ~= '' then checkpoint.opt.input_h5 = opt.input_h5 end
+if opt.seq_length > 0 then checkpoint.opt.seq_length = opt.seq_length end
+if opt.batch_size > 0 then checkpoint.opt.batch_size = opt.batch_size end
+if checkpoint.opt.seq_offset == nil then checkpoint.opt.seq_offset = 0 end
+
 -- Load the vocab and data
 local loader = DataLoader(checkpoint.opt)
 local N, T = checkpoint.opt.batch_size, checkpoint.opt.seq_length
@@ -50,13 +60,15 @@ model:evaluate()
 model:resetStates()
 local num = loader.split_sizes[opt.split]
 local loss = 0
+local lossstring = ''
 for i = 1, num do
-  print(string.format('%s batch %d / %d', opt.split, i, num))
+  print(string.format('%s batch %d / %d %s', opt.split, i, num, lossstring))
   local x, y = loader:nextBatch(opt.split)
   x = x:type(dtype)
   y = y:type(dtype):view(N * T)
   local scores = model:forward(x):view(N * T, -1)
   loss = loss + crit:forward(scores, y)
+  lossstring = string.format('average loss = %f', loss / i)
 end
 loss = loss / num
 print(string.format('%s loss = %f', opt.split, loss))
