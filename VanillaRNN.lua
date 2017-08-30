@@ -1,6 +1,7 @@
 require 'torch'
 require 'nn'
 
+local lu = require 'util.layer_utils'
 
 local layer, parent = torch.class('nn.VanillaRNN', 'nn.Module')
 
@@ -26,7 +27,7 @@ function layer:__init(input_dim, hidden_dim)
 
   local D, H = input_dim, hidden_dim
   self.input_dim, self.hidden_dim = D, H
-  
+
   self.weight = torch.Tensor(D + H, H)
   self.gradWeight = torch.Tensor(D + H, H)
   self.bias = torch.Tensor(H)
@@ -120,16 +121,15 @@ function layer:updateOutput(input)
     end
   end
 
-  local bias_expand = self.bias:view(1, H):expand(N, H)
+  local bias_expand = self.bias:view(1, H):expand(N * T, H)
   local Wx = self.weight[{{1, D}}]
   local Wh = self.weight[{{D + 1, D + H}}]
-  
+
   self.output:resize(N, T, H):zero()
+  self.output:view(N * T, H):addmm(bias_expand, x:view(N * T, D), Wx)
   local prev_h = h0
   for t = 1, T do
-    local cur_x = x[{{}, t}]
     local next_h = self.output[{{}, t}]
-    next_h:addmm(bias_expand, cur_x, Wx)
     next_h:addmm(prev_h, Wh)
     next_h:tanh()
     prev_h = next_h
@@ -162,8 +162,10 @@ function layer:backward(input, gradOutput, scale)
   local grad_h0 = self.grad_h0:resizeAs(h0):zero()
   local grad_x = self.grad_x:resizeAs(x):zero()
   local grad_next_h = self.buffer1:resizeAs(h0):zero()
+  self.buffer2:resize(1, H)
+
   for t = T, 1, -1 do
-    local next_h, prev_h = self.output[{{}, t}], nil
+    local next_h, prev_h = self.output[{{}, t}]
     if t == 1 then
       prev_h = h0
     else
@@ -171,12 +173,12 @@ function layer:backward(input, gradOutput, scale)
     end
     grad_next_h:add(grad_h[{{}, t}])
     local grad_a = grad_h0:resizeAs(h0)
-    grad_a:fill(1):addcmul(-1.0, next_h, next_h):cmul(grad_next_h)
+    lu.tanh_gradient(grad_a, next_h, grad_next_h)
     grad_x[{{}, t}]:mm(grad_a, Wx:t())
     grad_Wx:addmm(scale, x[{{}, t}]:t(), grad_a)
     grad_Wh:addmm(scale, prev_h:t(), grad_a)
     grad_next_h:mm(grad_a, Wh:t())
-    self.buffer2:resize(1, H):sum(grad_a, 1)
+    self.buffer2:sum(grad_a, 1)
     grad_b:add(scale, self.buffer2)
   end
   grad_h0:copy(grad_next_h)
