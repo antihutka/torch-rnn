@@ -21,6 +21,7 @@ cmd:option('-multi_count', 1)
 cmd:option('-benchmark', 0)
 cmd:option('-relevance_sampling', 0)
 cmd:option('-relevance_selection', 0)
+cmd:option('-gpu', 0)
 local opt = cmd:parse(arg)
 
 local checkpoint = torch.load(opt.checkpoint)
@@ -33,6 +34,12 @@ if opt.benchmark > 0 then timer = torch.Timer() end
 --local output = torch.LongTensor(1, 1)
 local use_relevance = false
 if opt.relevance_sampling > 0 or opt.relevance_selection > 0 then use_relevance = true end
+
+if opt.gpu > 0 then
+  require 'cutorch'
+  require 'cunn'
+  model:cuda()
+end
 
 if opt.interactive == 1 then
   local ok, readline = pcall(require, 'readline')
