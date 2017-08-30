@@ -163,13 +163,18 @@ local function f(w)
   local y_view = y:view(N * T)
   local loss = crit:forward(scores_view, y_view)
 
+  local time_f
+  if timer then
+    time_f = timer:time().real
+  end
+
   -- Run the Criterion and model backward to compute gradients, maybe timing it
   local grad_scores = crit:backward(scores_view, y_view):view(N, T, -1)
   model:backward(x, grad_scores)
   if timer then
     if cutorch then cutorch.synchronize() end
     local time = timer:time().real
-    print('Forward / Backward pass took ', time)
+    print(string.format('Forward / Backward pass took %.4f (%.4f/%.4f)', time, time_f, time - time_f))
     table.insert(forward_backward_times, time)
   end
 
