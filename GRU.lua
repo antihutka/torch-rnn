@@ -123,7 +123,7 @@ function layer:updateOutput(input)
     end
   end
 
-  local bias_expand = self.bias:view(1, 3 * H):expand(N, 3 * H)
+  local bias_expand = self.bias:view(1, 3 * H):expand(N * T, 3 * H)
   local Wx = self.weight[{{1, D}}]
   local Wh = self.weight[{{D + 1, D + H}}]
 
@@ -131,11 +131,12 @@ function layer:updateOutput(input)
   h:resize(N, T, H):zero()
   local prev_h = h0
   self.gates:resize(N, T, 3 * H):zero()
+
+  self.gates:view(N * T, 3 * H):addmm(bias_expand, x:view(N * T, D), Wx)
+
   for t = 1, T do
-    local cur_x = x[{{}, t}]
     local next_h = h[{{}, t}]
     local cur_gates = self.gates[{{}, t}]
-    cur_gates:addmm(bias_expand, cur_x, Wx)
     cur_gates[{{}, {1, 2 * H}}]:addmm(prev_h, Wh[{{}, {1, 2 * H}}])
     cur_gates[{{}, {1, 2 * H}}]:sigmoid()
 
