@@ -1,6 +1,7 @@
 require 'torch'
 require 'nn'
 
+local lu = require 'util.layer_utils'
 
 local layer, parent = torch.class('nn.GRIDGRU', 'nn.Module')
 
@@ -194,14 +195,6 @@ function layer:updateOutput(input)
   return self.output
 end
 
-local function sigmoid_gradient(gradInput, output, gradOutput)
-  gradInput.THNN.Sigmoid_updateGradInput(nil, gradOutput:cdata(), gradInput:cdata(), output:cdata())
-end
-
-local function tanh_gradient(gradInput, output, gradOutput)
-  gradInput.THNN.Tanh_updateGradInput(nil, gradOutput:cdata(), gradInput:cdata(), output:cdata())
-end
-
 function layer:backward(input, gradOutput, scale)
   scale = scale or 1.0
   local h0, x = self:_unpack_input(input)
@@ -278,12 +271,12 @@ function layer:backward(input, gradOutput, scale)
       local grad_h_t = grad_h[{{}, {tfirst, t}, {}}]
 
       grad_aud_t:cmul(grad_h_t, ud_t)
-      tanh_gradient(grad_ahcd_t, hcd_t, grad_aud_t)
+      lu.tanh_gradient(grad_ahcd_t, hcd_t, grad_aud_t)
       grad_aud_tn:mm(grad_ahcd_tn, Wxd[{{}, {2 * D + 1, 3 * D}}]:t())
       grad_aud_t:cmul(x_t)
-      sigmoid_gradient(grad_ard_t, rd_t, grad_aud_t)
+      lu.sigmoid_gradient(grad_ard_t, rd_t, grad_aud_t)
       temp_bufferd_t:add(hcd_t, -1, x_t)
-      sigmoid_gradient(grad_aud_t, ud_t, grad_h_t)
+      lu.sigmoid_gradient(grad_aud_t, ud_t, grad_h_t)
       grad_aud_t:cmul(temp_bufferd_t)
       grad_h0_tn:mm(grad_ad_tn, Whd:t())
       grad_Whd:addbmm(scale, ht[{{}, {tfirst, t}}]:transpose(1,2):transpose(2,3), grad_ad_tb[{{1, TBl}}])
@@ -305,12 +298,12 @@ function layer:backward(input, gradOutput, scale)
 
     grad_next_h:add(grad_h0)
     local grad_hc = grad_au:cmul(grad_next_h, u)
-    tanh_gradient(grad_ahc, hc, grad_hc)
+    lu.tanh_gradient(grad_ahc, hc, grad_hc)
     local grad_r = grad_au:mm(grad_ahc, Whtc:t() ):cmul(prev_h)
-    sigmoid_gradient(grad_ar, r, grad_r)
+    lu.sigmoid_gradient(grad_ar, r, grad_r)
 
     temp_buffer:add(hc, -1, prev_h)
-    sigmoid_gradient(grad_au, u, grad_next_h)
+    lu.sigmoid_gradient(grad_au, u, grad_next_h)
     grad_au:cmul(temp_buffer)
 
     grad_next_h:addcmul(-1, u, grad_next_h)
