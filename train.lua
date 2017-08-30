@@ -203,6 +203,7 @@ local avg_loss = 0
 local trend = 0
 local iteration_timer = torch.Timer()
 local val_loss_best, val_loss_best_at
+local val_loss_last = 0
 model:training()
 for i = start_i + 1, num_iterations do
   local epoch = math.floor(i / num_train) + 1
@@ -231,8 +232,8 @@ for i = start_i + 1, num_iterations do
   table.insert(train_loss_history, loss[1])
   if avg_loss == 0 then avg_loss = loss[1] end
   local avg_loss_old = avg_loss
-  avg_loss = avg_loss * 0.999 + loss[1] * 0.001
-  trend = trend * 0.999 + (avg_loss - avg_loss_old) * 0.001
+  avg_loss = avg_loss * 0.995 + loss[1] * 0.005
+  trend = trend * 0.995 + (avg_loss - avg_loss_old) * 0.005
   if opt.print_every > 0 and i % opt.print_every == 0 then
     local iter_time = iteration_timer:time().real / opt.print_every
     iteration_timer:reset()
@@ -264,7 +265,8 @@ for i = start_i + 1, num_iterations do
       val_loss_best = val_loss
       val_loss_best_at = i
     end
-    print(string.format("val_loss = %.6f, best = %.6f @ %d", val_loss, val_loss_best, val_loss_best_at))
+    print(string.format("val_loss = %.6f [%.6f], best = %.6f @ %d [%d]", val_loss, val_loss - val_loss_last, val_loss_best, val_loss_best_at, i - val_loss_best_at))
+    val_loss_last = val_loss
     table.insert(val_loss_history, val_loss)
     table.insert(val_loss_history_it, i)
     model:resetStates()
