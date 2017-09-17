@@ -18,11 +18,16 @@ cmd:option('-output_file', 'outputs/output-#.txt')
 cmd:option('-verbose', 0)
 cmd:option('-forcelayer', 0)
 cmd:option('-forcevalue', 1)
+cmd:option('-gpu', 0)
 local opt = cmd:parse(arg)
 
 local timer = torch.Timer()
 local checkpoint = torch.load(opt.checkpoint)
 local model = checkpoint.model
+if opt.gpu > 0 then
+  require 'cutorch'
+  model:cuda()
+end
 local input = torch.LongTensor(opt.count, 1)
 local outtext = {}
 local outputs
