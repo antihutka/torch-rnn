@@ -8,6 +8,7 @@ require 'GRIDGRU'
 require 'GRIDGRUM'
 require 'GRIDGRULR'
 require 'History'
+require 'LowMemDropout'
 
 local utils = require 'util.utils'
 
@@ -32,8 +33,14 @@ function LM:__init(kwargs)
   self.batchnorm = utils.get_kwarg(kwargs, 'batchnorm')
   self.history_depth = utils.get_kwarg(kwargs, 'history_depth')
   self.rank = utils.get_kwarg(kwargs, 'rank')
+  self.low_mem_dropout = utils.get_kwarg(kwargs, 'low_mem_dropout')
 
   local V, D, H, HD, R = self.vocab_size, self.wordvec_dim, self.rnn_size, self.history_depth, self.rank
+
+  local Dropout = nn.Dropout
+  if self.low_mem_dropout > 0 then
+    Dropout = nn.LowMemDropout
+  end
 
   self.rnns = {}
   self.net = nn.Sequential()
@@ -65,7 +72,7 @@ function LM:__init(kwargs)
       self.net:add(nn.TemporalAdapter(nn.BatchNormalization((self.model_type == 'gridgru' or self.model_type == 'gridgrum' or self.model_type == 'gridgrulr') and D or H)))
     end
     if self.dropout > 0 then
-      self.net:add(nn.Dropout(self.dropout, nil, true))
+      self.net:add(Dropout(self.dropout, nil, true))
     end
   end
 

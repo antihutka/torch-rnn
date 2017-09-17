@@ -51,6 +51,7 @@ cmd:option('-gpu_backend', 'cuda')
 cmd:option('-gpu_opt', -2)
 
 cmd:option('-swaprnn', 0)
+cmd:option('-low_mem_dropout', 1)
 
 local opt = cmd:parse(arg)
 
