@@ -386,6 +386,7 @@ function layer:clearState()
 
   self.grad_h0:set()
   self.grad_x:set()
+  self.gradInput = nil
   self.output:set()
 end
 
