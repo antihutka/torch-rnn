@@ -22,6 +22,8 @@ cmd:option('-benchmark', 0)
 cmd:option('-relevance_sampling', 0)
 cmd:option('-relevance_selection', 0)
 cmd:option('-gpu', 0)
+cmd:option('-commands', 0)
+cmd:option('-savedir', 'savestate')
 local opt = cmd:parse(arg)
 
 local checkpoint = torch.load(opt.checkpoint)
@@ -198,6 +200,41 @@ if opt.multi_count > 1 then get_str = get_str_multi else get_str = get_str_simpl
 
 put_str(opt.start_text .. "\n")
 
+local initial_state = model:getState(1)
+local initial_scores = current_scores:clone()
+
+local function checkname(n)
+  if (not n:find('^[A-Za-z0-9_-]+$')) then
+    error('bad file name')
+  end
+end
+
+local function loadstate(fn)
+  local s = torch.load(opt.savedir .. '/' .. fn .. '.state')
+  model:setState(1, s.state)
+  current_scores = s.scores
+end
+
+local function runcmd(l)
+  local cmd, arg = l:match(" *([^ ]+) +([^ ].*)")
+  if cmd == 'save' then
+    checkname(arg)
+    torch.save(opt.savedir .. '/' .. arg .. '.state', {state = model:getState(1), scores = current_scores})
+  elseif cmd == 'load' then
+    checkname(arg)
+    if not pcall(function () loadstate(arg) end) then
+      io.stderr:write('error loading state ' .. arg .. '\n')
+      model:setState(1, initial_state)
+      current_scores = initial_scores:clone()
+    end
+  elseif cmd == 'reset' or l == 'reset' then
+    model:setState(1, initial_state)
+    current_scores = initial_scores:clone()
+  else
+    error('bad command')
+  end
+end
+
 while true do
   local line = nextline()
   if line == nil then
@@ -205,6 +242,8 @@ while true do
   elseif line == "" then
     if opt.interactive == 1 then io.write("< ") end
     get_str()
+  elseif line:sub(1,2) == "/!" and opt.commands > 0 then
+    runcmd(line:sub(3))
   else
     put_str(line .. "\n")
     if opt.autoreply == 1 then
