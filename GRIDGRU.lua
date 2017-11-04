@@ -158,35 +158,56 @@ function layer:updateOutput(input)
   local ht_nt = ht:view(N * T, H)
   local h_nt = h:view(N * T, D)
 
-  gates_nt:addmm(bias_expandt_nt, x_nt, Wxt)
-  gatesd_nt[{{}, {1, 2 * D}}]:addmm(x_nt, Wxd[{{}, {1, 2 * D}}])
+  if N == 1 and T == 1 then
+    gates_nt[1]:addmv(bias_expandt_nt[1], Wxt:t(), x_nt[1])
+    gatesd_nt[{1, {1, 2 * D}}]:addmv(Wxd[{{}, {1, 2 * D}}]:t(), x_nt[1])
+  else
+    gates_nt:addmm(bias_expandt_nt, x_nt, Wxt)
+    gatesd_nt[{{}, {1, 2 * D}}]:addmm(x_nt, Wxd[{{}, {1, 2 * D}}])
+  end
 
   for t = 1, T do
     local next_ht = ht[{{}, t}]
     local cur_gates = self.gates[{{}, t}]
     local cur_gates_g = cur_gates[{{}, {1, 2 * H}}]
 
-    cur_gates_g:addmm(prev_ht, Whtg)
+    if N == 1 then
+      cur_gates_g[1]:addmv(Whtg:t(), prev_ht[1])
+    else
+      cur_gates_g:addmm(prev_ht, Whtg)
+    end
     cur_gates_g:sigmoid()
 
     local u = cur_gates[{{}, {1, H}}] --update gate : u = sig(Wx * x + Wh * prev_h + b)
     local r = cur_gates[{{}, {H + 1, 2 * H}}] --reset gate : r = sig(Wx * x + Wh * prev_h + b)
     next_ht:cmul(r, prev_ht) --temporary buffer : r . prev_h
     local hc = cur_gates[{{}, {2 * H + 1, 3 * H}}]
-    hc:addmm(next_ht, Whtc) -- hc += Wh * r . prev_h
+    if N == 1 then
+      hc[1]:addmv(Whtc:t(), next_ht[1])
+    else
+      hc:addmm(next_ht, Whtc) -- hc += Wh * r . prev_h
+    end
     hc:tanh() --hidden candidate : hc = tanh(Wx * x + Wh * r . prev_h + b)
     next_ht:addcmul(prev_ht,-1, u, prev_ht)
     next_ht:addcmul(u,hc)  --next_h = (1-u) . prev_h + u . hc
     prev_ht = next_ht
   end
 
-  gatesd_nt:addmm(ht_nt, Whd)
+  if N == 1 and T == 1 then
+    gatesd_nt[1]:addmv(Whd:t(), ht_nt[1])
+  else
+    gatesd_nt:addmm(ht_nt, Whd)
+  end
   self.gatesd[{{}, {}, {1, 2 * D}}]:sigmoid()
   local ud_b = self.gatesd[{{}, {}, {1, D}}]
   local rd_b = self.gatesd[{{}, {}, {D + 1, 2 * D}}]
   local hcd_b = gatesd_nt[{{}, {2 * D + 1, 3 * D}}]
   h:cmul(rd_b, x)
-  hcd_b:addmm(h_nt, Wxd[{{}, {2 * D + 1, 3 * D}}])
+  if N == 1 and T == 1 then
+    hcd_b[1]:addmv(Wxd[{{}, {2 * D + 1, 3 * D}}]:t(), h_nt[1])
+  else
+    hcd_b:addmm(h_nt, Wxd[{{}, {2 * D + 1, 3 * D}}])
+  end
   hcd_b:tanh()
   h:addcmul(x, -1, ud_b, x)
   h:addcmul(ud_b, hcd_b)
