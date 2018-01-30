@@ -14,6 +14,7 @@ parser.add_argument('--output_json', default='data/index.json')
 parser.add_argument('--val_frac', type=float, default=0.1)
 parser.add_argument('--test_frac', type=float, default=0.1)
 parser.add_argument('--quiet', action='store_true')
+parser.add_argument('--freeze-vocab', action='store_true')
 parser.add_argument('--encoding', default='utf-8')
 args = parser.parse_args()
 
@@ -50,7 +51,6 @@ if __name__ == '__main__':
     for key in token_to_idx:
       if len(key) > 1:
         num = int(key[1:4])
-        print 'converting %s to %d' % (key, num)
         new_token_to_idx[chr(num)] = token_to_idx[key]
       else:
         new_token_to_idx[key] = token_to_idx[key]
@@ -61,6 +61,8 @@ if __name__ == '__main__':
       total_size += len(line)
       for char in line:
         if char not in token_to_idx:
+          if args.freeze_vocab:
+            raise Exception('Tried to expand frozen vocabulary')
           token_to_idx[char] = len(token_to_idx) + 1
 
   # Now we can figure out the split sizes
