@@ -302,6 +302,8 @@ for i = start_i + 1, num_iterations do
     local filename = string.format('%s_%d.t7', opt.checkpoint_name, i)
     paths.mkdir(paths.dirname(filename))
     torch.save(filename, checkpoint)
+    params, grad_params = nil, nil
+    collectgarbage()
     set_model_type()
     collectgarbage()
   end
