@@ -24,6 +24,7 @@ cmd:option('-relevance_selection', 0)
 cmd:option('-gpu', 0)
 cmd:option('-commands', 0)
 cmd:option('-savedir', 'savestate')
+cmd:option('-ksm', 0)
 local opt = cmd:parse(arg)
 
 local checkpoint = torch.load(opt.checkpoint)
@@ -36,6 +37,11 @@ if opt.benchmark > 0 then timer = torch.Timer() end
 --local output = torch.LongTensor(1, 1)
 local use_relevance = false
 if opt.relevance_sampling > 0 or opt.relevance_selection > 0 then use_relevance = true end
+
+if opt.ksm > 0 then
+  local ksm = require 'util.ksm'
+  ksm.make_parameters_mergeable(model)
+end
 
 if opt.gpu > 0 then
   require 'cutorch'
