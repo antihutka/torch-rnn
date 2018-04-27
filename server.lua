@@ -25,6 +25,7 @@ cmd:option('-gpu', 0)
 cmd:option('-commands', 0)
 cmd:option('-savedir', 'savestate')
 cmd:option('-ksm', 0)
+cmd:option('-lineprefix', '')
 local opt = cmd:parse(arg)
 
 local checkpoint = torch.load(opt.checkpoint)
@@ -247,6 +248,7 @@ while true do
     break
   elseif line == "" then
     if opt.interactive == 1 then io.write("< ") end
+    if opt.lineprefix ~= '' then put_str(opt.lineprefix) io.write(opt.lineprefix) end
     get_str()
   elseif line:sub(1,2) == "/!" and opt.commands > 0 then
     runcmd(line:sub(3))
@@ -254,6 +256,7 @@ while true do
     put_str(line .. "\n")
     if opt.autoreply == 1 then
       io.write("< ")
+      if opt.lineprefix ~= '' then put_str(opt.lineprefix) io.write(opt.lineprefix) end
       get_str()
     end
   end
