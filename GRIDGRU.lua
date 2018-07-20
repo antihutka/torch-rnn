@@ -14,6 +14,8 @@ function layer:__init(input_dim, hidden_dim)
 
   local D, H = input_dim, hidden_dim
   self.input_dim, self.hidden_dim = D, H
+  self.zoneout_prob = 0.01
+  self.zoneout_probd = 0.00
 
   self.weight = torch.Tensor(D + H, 3 * H + 3 * D)
   self.gradWeight = torch.Tensor(D + H, 3 * H + 3 * D):zero()
@@ -188,6 +190,14 @@ function layer:updateOutput(input)
       hc:addmm(next_ht, Whtc) -- hc += Wh * r . prev_h
     end
     hc:tanh() --hidden candidate : hc = tanh(Wx * x + Wh * r . prev_h + b)
+
+    if self.train and self.zoneout_prob > 0 then
+      next_ht:bernoulli(1 - self.zoneout_prob)
+      u:cmul(next_ht)
+    elseif self.zoneout_prob and self.zoneout_prob > 0 then
+      u:mul(1-self.zoneout_prob)
+    end
+
     next_ht:addcmul(prev_ht,-1, u, prev_ht)
     next_ht:addcmul(u,hc)  --next_h = (1-u) . prev_h + u . hc
     prev_ht = next_ht
@@ -202,6 +212,13 @@ function layer:updateOutput(input)
   local ud_b = self.gatesd[{{}, {}, {1, D}}]
   local rd_b = self.gatesd[{{}, {}, {D + 1, 2 * D}}]
   local hcd_b = gatesd_nt[{{}, {2 * D + 1, 3 * D}}]
+  if self.train and self.zoneout_probd > 0 then
+    -- use h as temp for depth zoneout
+    h:bernoulli(1 - self.zoneout_probd)
+    ud_b:cmul(h)
+  elseif self.zoneout_probd and self.zoneout_probd > 0 then
+    ud_b:mul(1-self.zoneout_probd)
+  end
   h:cmul(rd_b, x)
   if N == 1 and T == 1 then
     hcd_b[1]:addmv(Wxd[{{}, {2 * D + 1, 3 * D}}]:t(), h_nt[1])
@@ -412,7 +429,10 @@ function layer:clearState()
 end
 
 function layer:__tostring__()
-  return 'nn.GRIDGRU: ' .. self.input_dim .. 'x' .. self.hidden_dim
+  local txt = 'nn.GRIDGRU: ' .. self.input_dim .. 'x' .. self.hidden_dim
+  if self.zoneout_prob and self.zoneout_prob > 0 then txt = txt .. ' zo ' .. self.zoneout_prob end
+  if self.zoneout_probd and self.zoneout_probd > 0 then txt = txt .. ' zd ' .. self.zoneout_probd end
+  return txt
 end
 
 local swappable_tensors = { "cell", "gates", "gatesd" }

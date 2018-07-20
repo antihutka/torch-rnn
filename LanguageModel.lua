@@ -34,6 +34,8 @@ function LM:__init(kwargs)
   self.history_depth = utils.get_kwarg(kwargs, 'history_depth')
   self.rank = utils.get_kwarg(kwargs, 'rank')
   self.low_mem_dropout = utils.get_kwarg(kwargs, 'low_mem_dropout')
+  self.zoneout = utils.get_kwarg(kwargs, 'zoneout')
+  self.zoneoutd = utils.get_kwarg(kwargs, 'zoneoutd')
 
   local V, D, H, HD, R = self.vocab_size, self.wordvec_dim, self.rnn_size, self.history_depth, self.rank
 
@@ -60,6 +62,8 @@ function LM:__init(kwargs)
       rnn = nn.GRU(prev_dim, H)
     elseif self.model_type == 'gridgru' then
       rnn = nn.GRIDGRU(D * (HD + 1), H)
+      rnn.zoneout_prob = self.zoneout
+      rnn.zoneout_probd = self.zoneoutd
     elseif self.model_type == 'gridgrum' then
       rnn = nn.GRIDGRUM(D * (HD + 1), H, 2)
     elseif self.model_type == 'gridgrulr' then

@@ -28,6 +28,8 @@ cmd:option('-dropout', 0)
 cmd:option('-batchnorm', 0)
 cmd:option('-history_depth', 0)
 cmd:option('-rank', 64)
+cmd:option('-zoneout', 0)
+cmd:option('-zoneoutd', 0)
 
 -- Optimization options
 cmd:option('-max_epochs', 50)
