@@ -11,6 +11,7 @@ function DataLoader:__init(kwargs)
   self.batch_size = utils.get_kwarg(kwargs, 'batch_size')
   self.seq_length = utils.get_kwarg(kwargs, 'seq_length')
   self.seq_offset = utils.get_kwarg(kwargs, 'seq_offset')
+  self.shuffle = utils.get_kwarg(kwargs, 'shuffle_data')
   local N, T = self.batch_size, self.seq_length
 
   -- Just slurp all the data into memory
@@ -46,6 +47,7 @@ function DataLoader:__init(kwargs)
   end
 
   self.split_idxs = {train=1, val=1, test=1}
+  self.shuffle_order = torch.LongTensor()
 end
 
 
@@ -54,6 +56,22 @@ function DataLoader:nextBatch(split)
   assert(idx, 'invalid split ' .. split)
   local x = self.x_splits[split][idx]
   local y = self.y_splits[split][idx]
+  local z
+  if self.shuffle > 0 and split == 'train' then
+    local so = self.shuffle_order
+    if idx == 1 then
+      so:randperm(self.split_sizes[split])
+    end
+    x = self.x_splits[split][so[idx]]
+    y = self.y_splits[split][so[idx]]
+
+    if so[idx] > 1 then
+      z = self.x_splits[split][so[idx]-1]
+    end
+    if idx > 1 and so[idx] == so[idx-1]+1 then
+      z = nil
+    end
+  end
   if idx == self.split_sizes[split] then
     self.split_idxs[split] = 1
     if split == 'train' and self.seq_offset > 0 then
@@ -64,6 +82,6 @@ function DataLoader:nextBatch(split)
   else
     self.split_idxs[split] = idx + 1
   end
-  return x, y
+  return x, y, z
 end
 

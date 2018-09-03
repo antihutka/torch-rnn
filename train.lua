@@ -16,6 +16,7 @@ cmd:option('-input_json', 'data/tiny-shakespeare.json')
 cmd:option('-batch_size', 50)
 cmd:option('-seq_length', 50)
 cmd:option('-seq_offset', 0)
+cmd:option('-shuffle_data', 0)
 
 -- Model options
 cmd:option('-init_from', '')
@@ -152,12 +153,19 @@ local function f(w)
 
   -- Get a minibatch and run the model forward, maybe timing it
   local timer
-  local x, y = loader:nextBatch('train')
+  local x, y, z = loader:nextBatch('train')
   x, y = x:type(dtype), y:type(dtype)
+  if z then z:type(dtype) end
   if opt.speed_benchmark == 1 then
     if cutorch then cutorch.synchronize() end
     timer = torch.Timer()
   end
+
+  if z then
+    model:resetStates()
+    model:forward(z)
+  end
+
   local scores = model:forward(x)
 
   -- Use the Criterion to compute loss; we need to reshape the scores to be
