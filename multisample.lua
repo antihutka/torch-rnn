@@ -24,6 +24,7 @@ local opt = cmd:parse(arg)
 local timer = torch.Timer()
 local checkpoint = torch.load(opt.checkpoint)
 local model = checkpoint.model
+model:evaluate()
 if opt.gpu > 0 then
   require 'cutorch'
   model:cuda()
