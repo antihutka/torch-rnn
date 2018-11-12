@@ -62,7 +62,7 @@ if __name__ == '__main__':
       for char in line:
         if char not in token_to_idx:
           if args.freeze_vocab:
-            raise Exception('Tried to expand frozen vocabulary')
+            raise Exception('Tried to expand frozen vocabulary: "' + line + '" / ' + str(ord(char)))
           token_to_idx[char] = len(token_to_idx) + 1
 
   # Now we can figure out the split sizes
