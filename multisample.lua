@@ -19,6 +19,7 @@ cmd:option('-verbose', 0)
 cmd:option('-forcelayer', 0)
 cmd:option('-forcevalue', 1)
 cmd:option('-gpu', 0)
+cmd:option('-line_start_with', '')
 local opt = cmd:parse(arg)
 
 local timer = torch.Timer()
@@ -34,6 +35,8 @@ local outtext = {}
 local outputs
 local newline_idx = model.token_to_idx['\n']
 local outfiles = {}
+
+local forcequeue = {}
 
 for i = 1, opt.count do
   outtext[i] = ""
@@ -58,10 +61,15 @@ timer:reset()
 for i = 1, opt.length do
   for j = 1, opt.count do
     local ni = model:sampleFromScores(outputs[{{j}}], opt.temperature, 1)
+    if forcequeue[j] and #forcequeue[j] > 0 then
+      ni = model.token_to_idx[forcequeue[j]:sub(1,1)]
+      forcequeue[j] = forcequeue[j]:sub(2,-1)
+    end
     if ni == newline_idx then
       if opt.verbose > 0 then print(string.format("%3d:%s", j, outtext[j])) end
       outfiles[j]:write(outtext[j] .. '\n')
       outtext[j] = ""
+      forcequeue[j] = opt.line_start_with
     else
       outtext[j] = outtext[j] .. model.idx_to_token[ni]
     end
