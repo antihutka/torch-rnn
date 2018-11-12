@@ -251,3 +251,15 @@ function layer:clearState()
   self.grad_x:set()
   self.output:set()
 end
+
+function layer:setBatchSize(N)
+  local H = self.hidden_dim
+  local T = self.output:size(2)
+  self.output:resize(N, T, H):zero()
+  self.h0:resize(N, H):zero()
+end
+
+function layer:getState(n)
+  local T = self.output:size(2)
+  return self.output[{n, T}]
+end

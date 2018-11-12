@@ -304,3 +304,14 @@ function layer:__tostring__()
   return string.format('%s(%d -> %d)', name, din, dout)
 end
 
+function layer:setBatchSize(N)
+  local H = self.hidden_dim
+  local T = self.cell:size(2)
+  self.cell:resize(N, T, H):zero()
+  self.h0:resize(N, H):zero()
+end
+
+function layer:getState(n)
+  local T = self.cell:size(2)
+  return self.cell[{n, T}]
+end
