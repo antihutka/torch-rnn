@@ -26,6 +26,7 @@ cmd:option('-commands', 0)
 cmd:option('-savedir', 'savestate')
 cmd:option('-ksm', 0)
 cmd:option('-lineprefix', '')
+cmd:option('-chop', 32)
 local opt = cmd:parse(arg)
 
 local checkpoint = torch.load(opt.checkpoint)
@@ -82,7 +83,15 @@ function put_str(s)
   local length = x:size(2)
   local sampled = torch.LongTensor(1, length)
   sampled[{{}, {1, length}}]:copy(x)
-  current_scores = model:forward(x)[{{}, {length, length}}]
+  if opt.chop > 0 and opt.chop < length then
+    for i = 1,length,opt.chop do
+      local j = math.min(length, i + opt.chop - 1)
+      if opt.verbose > 0 then print('chop', i, j) end
+      current_scores = model:forward(x[{{}, {i, j}}]) [{{}, {-1, -1}}]
+    end
+  else
+    current_scores = model:forward(x)[{{}, {length, length}}]
+  end
 end
 
 function sq(s)
