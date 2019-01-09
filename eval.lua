@@ -20,7 +20,6 @@ cmd:option('-seq_length', 0)
 cmd:option('-batch_size', 0)
 local opt = cmd:parse(arg)
 
-
 -- Set up GPU stuff
 local dtype = 'torch.FloatTensor'
 if opt.gpu >= 0 and opt.gpu_backend == 'cuda' then
@@ -50,6 +49,7 @@ if opt.input_h5 ~= '' then checkpoint.opt.input_h5 = opt.input_h5 end
 if opt.seq_length > 0 then checkpoint.opt.seq_length = opt.seq_length end
 if opt.batch_size > 0 then checkpoint.opt.batch_size = opt.batch_size end
 if checkpoint.opt.seq_offset == nil then checkpoint.opt.seq_offset = 0 end
+checkpoint.opt.shuffle_data = 0
 
 -- Load the vocab and data
 local loader = DataLoader(checkpoint.opt)
