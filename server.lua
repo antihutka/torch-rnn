@@ -27,6 +27,9 @@ cmd:option('-savedir', 'savestate')
 cmd:option('-ksm', 0)
 cmd:option('-lineprefix', '')
 cmd:option('-chop', 32)
+cmd:option('-print_newline_prob', 0)
+cmd:option('-soft_newline_start', 400)
+cmd:option('-soft_newline_mult', 0.03)
 local opt = cmd:parse(arg)
 
 local checkpoint = torch.load(opt.checkpoint)
@@ -113,11 +116,22 @@ function set_color(color)
 end
 
 function get_str_simple()
-  local next_char, next_idx, next_ent
+  local next_char, next_idx, next_ent, next_prob, all_probs
   local total_ent, length = 0, opt.maxlength
   for t = 1, opt.maxlength do
+    local newline_boost = 0
     if timer then timer:reset() end
-    next_idx, next_ent = model:sampleFromScores(current_scores, opt.temperature, opt.sample)
+    if opt.soft_newline_start < t then
+      newline_boost = (t - opt.soft_newline_start) * opt.soft_newline_mult
+      current_scores[{1, 1, model.token_to_idx['\n']}] = current_scores[{1, 1, model.token_to_idx['\n']}] + newline_boost
+    end
+    next_idx, next_ent, next_prob, all_probs = model:sampleFromScores(current_scores, opt.temperature, opt.sample)
+    if opt.print_newline_prob > 0 then
+      local newline_prob = all_probs[model.token_to_idx['\n']]
+      if newline_prob > 0.01 then
+        io.write(string.format('\027[34m[%3.2f %d +%.1f]\027[0m', newline_prob, t, newline_boost))
+      end
+    end
     total_ent = total_ent + next_ent
     next_char = model.idx_to_token[next_idx]
     set_color(next_ent)

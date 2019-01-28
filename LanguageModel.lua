@@ -183,7 +183,7 @@ function LM:sampleFromScores(scores, temperature, sample)
   else
     next_char = torch.multinomial(probs, 1):view(1, 1)[{1,1}]
   end
-  return next_char, -math.log(probs[next_char]), probs[next_char]
+  return next_char, -math.log(probs[next_char]), probs[next_char], probs
 end
 
 --[[
