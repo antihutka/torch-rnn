@@ -9,6 +9,7 @@ require 'GRIDGRUM'
 require 'GRIDGRULR'
 require 'History'
 require 'LowMemDropout'
+require 'StatefulConvolution'
 
 local utils = require 'util.utils'
 
@@ -68,10 +69,15 @@ function LM:__init(kwargs)
       rnn = nn.GRIDGRUM(D * (HD + 1), H, 2)
     elseif self.model_type == 'gridgrulr' then
       rnn = nn.GRIDGRULR(D * (HD + 1), H, R)
+    elseif self.model_type == 'conv' then
+      rnn = nn.StatefulConvolution(prev_dim, H, 3)
     end
     rnn.remember_states = true
     table.insert(self.rnns, rnn)
     self.net:add(rnn)
+    if self.model_type == 'conv' then
+      self.net:add(nn.Tanh())
+    end
     if self.batchnorm == 1 then
       self.net:add(nn.TemporalAdapter(nn.BatchNormalization((self.model_type == 'gridgru' or self.model_type == 'gridgrum' or self.model_type == 'gridgrulr') and D or H)))
     end
