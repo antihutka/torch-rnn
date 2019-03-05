@@ -1,6 +1,6 @@
 local SC, parent = torch.class('nn.StatefulConvolution', 'nn.Module')
 
--- N - batches, T - time, I - input dim, O - output dim, D - dilat (not implemented)
+-- N - batches, T - time, I - input dim, O - output dim, D - dilat
 -- (N, T, I) -> (N, T, O)
 
 function SC:__init(I, O, K, D)
@@ -37,7 +37,8 @@ end
 
 function SC:updateOutput(input)
   local N, T = input:size(1), input:size(2)
-  local I, O, K = self.input_dim, self.output_dim, self.kernel_size
+  local I, O, K, D = self.input_dim, self.output_dim, self.kernel_size, self.dilat
+  local H = (K-1)*D
   
 --  print(string.format('N=%d T=%d I=%d O=%d K=%d', N, T, I, O, K))
   
@@ -47,19 +48,19 @@ function SC:updateOutput(input)
   
   output:resize(N, T, O)
   if in_h:dim() == 0 then
-    in_h:resize(N, K-1, I):zero()
+    in_h:resize(N, H, I):zero()
   end
   output:copy(self.bias:reshape(1, 1, O):expand(N, T, O))
   
+  
   for i = 1, K do
-    if i < (T + 1) then
---      print(string.format('output[%d,%d]:baddmm(input[1,%d],weight[%d])', i, T, T-i+1, i))
-      output[{{}, {i, T}, {}}]:baddbmm(input[{{}, {1, T-i+1}, {}}], weight[{{i}}]:expand(N, I, O))
+    local t = (i-1)*D
+    if t < T then
+      output[{{}, {t+1, T}, {}}]:baddbmm(input[{{}, {1, T-t}, {}}], weight[{{i}}]:expand(N, I, O))
     end
     if i > 1 then
-      local e = math.max(0, i-1-T)
---      print(string.format('output[1, %d]:baddbmm(in_h[%d, %d],weight[%d])', i-e-1, 1-i, K-e-1, i))
-      output[{{}, {1, i-e-1}, {}}]:baddbmm(in_h[{{}, {1-i, K-e-1}, {}}], weight[{{i}}]:expand(N, I, O))
+      local e = math.max(0, t-T)
+      output[{{}, {1, t-e}, {}}]:baddbmm(in_h[{{}, {-t, H-e}, {}}], weight[{{i}}]:expand(N, I, O))
     end
   end
   
@@ -67,15 +68,12 @@ function SC:updateOutput(input)
     self.input_prev_back:resizeAs(in_h):copy(in_h)
   end
   
-  if K-1 <= T then
---    print(string.format('in_h[] = input[%d,-1]', 1-K))
-    in_h:copy(input[{{}, {1-K, -1}, {}}])
+  if H <= T then
+    in_h:copy(input[{{}, {-H, -1}, {}}])
   else
-    for i = 1, K-T-1 do
---      print(string.format('in_h[] = in_h[%d]', i, i+T))
+    for i = 1, H-T do
       in_h[{{}, i, {}}]:copy(in_h[{{}, i+T, {}}])
     end
---    print(string.format('in_h[%d,-1] = input[]', -T))
     in_h[{{}, {-T, -1}, {}}]:copy(input)
   end
   return output
@@ -83,7 +81,7 @@ end
 
 function SC:updateGradInput(input, gradOutput)
   local N, T = input:size(1), input:size(2)
-  local I, O, K = self.input_dim, self.output_dim, self.kernel_size
+  local I, O, K, D = self.input_dim, self.output_dim, self.kernel_size, self.dilat
 
   local in_h = self.input_prev_back
   local output = self.output
@@ -93,9 +91,9 @@ function SC:updateGradInput(input, gradOutput)
   gradInput:resize(N, T, I):zero()
   
   for i = 1, K do
-    if i < (T + 1) then
---      print(string.format('gradInput[1,%d]:baddbmm(gradOutput[%d,%d], weight[%d])', T-i+1, i, T, i))
-      gradInput[{{}, {1, T-i+1}, {}}]:baddbmm(gradOutput[{{}, {i, T}, {}}], weight[{{i}}]:expand(N, I, O):transpose(2,3))
+    local t = (i-1)*D
+    if t < T then
+      gradInput[{{}, {1, T-t}, {}}]:baddbmm(gradOutput[{{}, {t+1, T}, {}}], weight[{{i}}]:expand(N, I, O):transpose(2,3))
     end
   end
   
@@ -104,7 +102,8 @@ end
 
 function SC:accGradParameters(input, gradOutput, scale)
   local N, T = input:size(1), input:size(2)
-  local I, O, K = self.input_dim, self.output_dim, self.kernel_size
+  local I, O, K, D = self.input_dim, self.output_dim, self.kernel_size, self.dilat
+  local H = (K-1)*D
   scale = scale or 1.0
 
   local in_h = self.input_prev_back
@@ -114,14 +113,13 @@ function SC:accGradParameters(input, gradOutput, scale)
   local gradBias = self.gradBiasBuffer
   
   for i = 1, K do
+    local t = (i-1)*D
     if i < (T + 1) then
---      print(string.format('gradWeight[%d]:addbmm(input[1,%d], output[%d,%d])', i, T-i+1, i, T))
-      gradWeight[i]:addbmm(scale, input[{{}, {1, T-i+1}, {}}]:transpose(2,3), gradOutput[{{}, {i, T}, {}}])
+      gradWeight[i]:addbmm(scale, input[{{}, {1, T-t}, {}}]:transpose(2,3), gradOutput[{{}, {t+1, T}, {}}])
     end
     if i > 1 then
       local e = math.max(0, i-1-T)
---      print(string.format('gradWeight[%d]:addbmm(in_h[%d,%d], output[1,%d])', i, 1-i, K-e-1, i-e-1))
-      gradWeight[i]:addbmm(in_h[{{}, {1-i, K-e-1}, {}}]:transpose(2,3), gradOutput[{{}, {1, i-e-1}, {}}])
+      gradWeight[i]:addbmm(in_h[{{}, {-t, H-e}, {}}]:transpose(2,3), gradOutput[{{}, {1, t-e}, {}}])
     end
   end
   

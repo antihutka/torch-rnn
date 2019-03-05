@@ -70,7 +70,7 @@ function LM:__init(kwargs)
     elseif self.model_type == 'gridgrulr' then
       rnn = nn.GRIDGRULR(D * (HD + 1), H, R)
     elseif self.model_type == 'conv' then
-      rnn = nn.StatefulConvolution(prev_dim, H, 3)
+      rnn = nn.StatefulConvolution(prev_dim, H, 2, 2^(i-1))
     end
     rnn.remember_states = true
     table.insert(self.rnns, rnn)
@@ -92,6 +92,7 @@ function LM:__init(kwargs)
     self.net:add(nn.TemporalAdapter(nn.Linear(H, V)))
   end
   self.has_temporal_adapter = true
+  print(self.net)
 end
 
 
