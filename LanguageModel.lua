@@ -296,3 +296,24 @@ function LM:setState(n, state)
     v:getState(n):copy(state[k])
   end
 end
+
+function LM:unmapTensors(checkpoint_path)
+  local storages = {}
+  local function unmaptensor(t)
+    if not storages[t.storage] then
+      storages[t.storage] = torch.FloatStorage(checkpoint_path .. '.' .. t.storage, false)
+    end
+    return torch.Tensor(storages[t.storage], t.offset, t.size, t.stride)
+  end
+  local function rg(module)
+    local t = torch.type(module)
+    if (t == 'nn.TemporalAdapter') then module.net:apply(rg) end
+    if module.weight then
+      module.weight = unmaptensor(module.weight)
+    end
+    if module.bias then
+      module.bias = unmaptensor(module.bias)
+    end
+  end
+  self.net:apply(rg)
+end

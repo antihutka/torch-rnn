@@ -48,6 +48,10 @@ if opt.ksm > 0 then
   ksm.make_parameters_mergeable(model)
 end
 
+if checkpoint.is_mapped then
+  model:unmapTensors(opt.checkpoint)
+end
+
 if opt.gpu > 0 then
   require 'cutorch'
   require 'cunn'
