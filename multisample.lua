@@ -25,6 +25,11 @@ local opt = cmd:parse(arg)
 local timer = torch.Timer()
 local checkpoint = torch.load(opt.checkpoint)
 local model = checkpoint.model
+
+if checkpoint.is_mapped then
+  model:unmapTensors(opt.checkpoint)
+end
+
 model:evaluate()
 if opt.gpu > 0 then
   require 'cutorch'
