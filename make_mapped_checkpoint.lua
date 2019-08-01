@@ -5,6 +5,7 @@ require 'LanguageModel'
 local cmd = torch.CmdLine()
 cmd:option('-i', 'cv/in.t7')
 cmd:option('-o', 'cv/out.t7')
+cmd:option('-j', '')
 opt = cmd:parse(arg)
 
 cp = torch.load(opt.i)
@@ -47,3 +48,52 @@ end
 cp.model.net:apply(rg)
 cp.is_mapped = true
 torch.save(opt.o, cp)
+
+function jsonize(t)
+  local j = {}
+  j.storage = t.storage
+  j.offset = t.offset - 1
+  j.size = {}
+  j.stride = {}
+  for i = 1, t.size:size() do
+    table.insert(j.size, t.size[i])
+    table.insert(j.stride, t.stride[i])
+  end
+  return j
+end
+
+if opt.j ~= '' then
+  local util = require 'util.utils'
+  local jdata = {}
+  jdata.idx_to_token = cp.model.idx_to_token
+  jdata.token_to_idx = cp.model.token_to_idx
+  jdata.layers = {}
+  for i,m in ipairs(cp.model.net.modules) do
+    local mtype = torch.type(m)
+    print(string.format("found module %d: %s", i, mtype))
+    local jm = {}
+    if mtype == 'nn.LookupTable' then
+      jm.type = 'LookupTable'
+      jm.weight = jsonize(m.weight)
+    elseif mtype == 'nn.GRIDGRU' then
+      jm.type = 'GRIDGRU'
+      jm.weight = jsonize(m.weight)
+      jm.bias = jsonize(m.bias)
+      jm.zoneout_p = m.zoneout_prob
+      jm.zoneout_pd = m.zoneout_probd
+      jm.input_dim = m.input_dim
+      jm.hidden_dim = m.hidden_dim
+    elseif mtype == 'nn.Dropout' then
+      jm.type = 'Dropout'
+      jm.p = m.p
+    elseif mtype == 'nn.TemporalAdapter' then
+      jm.type = 'Linear'
+      jm.weight = jsonize(m.net.modules[2].weight)
+      jm.bias = jsonize(m.net.modules[2].bias)
+    else
+      error("unknown type")
+    end
+    table.insert(jdata.layers, jm)
+  end
+  util.write_json(opt.j, jdata)
+end
